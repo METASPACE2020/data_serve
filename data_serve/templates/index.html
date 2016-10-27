@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+{% block body %}
+
+    <h1>Explore a dataset</h1>
+    <p>
+        Dataset ID: <input type="text" size="5" name="ds_id" value="0">
+    <p>
+        m/z <input type="text" size="5" name="m_z"> +/-
+            <input type="text" size="5" name="ppm"> =>
+    <p>
+        <a href=# id="calculate">get image</a>
+
+      <span id="result"></span>
+    <p>
+    <canvas id="ion_image_canvas" width="250px" height="250px"><!-- Ion image will be drawn inside this canvas --></canvas>
+    <div id="spec_view" style="width: 500px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
+
+    <script type="text/javascript">
+        $(function() {
+            var submit_form = function(e) {
+                var ds_id = $('input[name="ds_id"]').val();
+                var m_z   = $('input[name="m_z"]').val();
+                $.getJSON($SCRIPT_ROOT + ds_id + '/im/' + m_z,
+                        {
+                        ppm: $('input[name="ppm"]').val()
+                    },
+                    function(data) {
+                            $('input[name=a]').focus().select();
+                            var canvas = document.getElementById("ion_image_canvas");
+                            var ctx = canvas.getContext("2d");
+                            var background = new Image();
+                            background.src = 'data:image/png;base64,' + data.b64_im;
+                            background.onload = function(){
+                                ctx.drawImage(background,0,0);
+                            }
+                    }
+                );
+                return false;
+            };
+            $('a#calculate').bind('click', submit_form);
+            $('input[type=text]').bind('keydown', function(e) {
+                if (e.keyCode == 13) {
+                    submit_form(e);
+                }
+            });
+            $('input[name=a]').focus();
+        });
+    </script>
+
+    <script>
+        function updateSpectrum(x_y, minmz, maxmz, npeaks){
+            var minmz = (typeof minmz !== 'undefined') ?  minmz : 0;
+            var maxmz = (typeof maxmz !== 'undefined') ?  maxmz : 1e9;
+            var npeaks = (typeof npeaks !== 'undefined') ?  npeaks : 500;
+            var ds_id = $('input[name="ds_id"]').val();
+            $.getJSON($SCRIPT_ROOT + ds_id + '/spec_xy/' + x_y.x +"/" + x_y.y + "/",
+                    {npeaks: npeaks,
+                     minmz: minmz,
+                     maxmz: maxmz
+                    })
+                    .done(function(data) {
+                        makeplot(data)
+                        console.log( "success" );
+                    })
+                    .fail(function() {
+                        console.log( "error" );
+                    });
+        }
+        function writeMessage(canvas, message) {
+            var context = canvas.getContext('2d');
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.font = '18pt Calibri';
+            context.fillStyle = 'black';
+            context.fillText(message, 10, 25);
+        }
+        function getMousePos(canvas, evt) {
+            var rect = canvas.getBoundingClientRect();
+            return {
+              //x: evt.clientX - rect.left,
+              //y: evt.clientY - rect.top
+                x: Math.floor((evt.clientX-rect.left)/(rect.right-rect.left)*canvas.width),
+                y: Math.floor((evt.clientY-rect.top)/(rect.bottom-rect.top)*canvas.height)
+            };
+        }
+        var canvas = document.getElementById('ion_image_canvas');
+        var canvas_write = document.getElementById('mouse_pos');
+        var context = canvas.getContext('2d');
+        var text = document.getElementById('spec_string');
+        canvas.addEventListener('mouseup', function(evt) {
+            var mousePos = getMousePos(canvas, evt);
+            var message = 'Mouse position: ' + mousePos.x + ',' + mousePos.y;
+            //writeMessage(canvas_write, message);
+            updateSpectrum(mousePos)
+        }, false);
+
+        function makeplot(data){
+            processData(data)
+        }
+
+        function processData(json_data) {
+            var x = [], y = [], standard_deviation = [];
+
+            for (var i = 0; i < json_data.spec.length; i++) {
+                row = json_data.spec[i];
+                x.push(row[0]);
+                y.push(row[1]);
+            }
+            makePlotly(x, y, json_data.x, json_data.y);
+        }
+
+        function makePlotly( x, y, c_x, c_y ){
+            console.log(x)
+            var plotDiv = document.getElementById("spec_view");
+            var traces = [{
+                    x: x,
+                    y: y,
+                    //line: {
+                    //color: 'black',
+                     //}
+                }];
+            var layout = {title: 'Spectrum from (' + c_x + ' ' + c_y + ')'}
+            Plotly.newPlot(plotDiv, traces, layout);
+            plotDiv.on('plotly_relayout',
+                function(eventdata){
+                    //alert( 'ZOOM!' + '\n\n' +
+                    //   'Event data:' + '\n' +
+                    //     JSON.stringify(eventdata) + '\n\n' +
+                    //    'x-axis start:' + eventdata['xaxis.range[0]'] + '\n' +
+                    //    'x-axis end:' + eventdata['xaxis.range[1]'] );
+                    console.log('update trace')
+                    console.log(eventdata)
+                    updateSpectrum({x: c_x, y: c_y}, eventdata['xaxis.range[0]'], eventdata['xaxis.range[1]'])
+                    //Plotly.deleteTraces(plotDiv, 0);
+                });
+        };
+
+    </script>
+{% endblock %}
