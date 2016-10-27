@@ -5,12 +5,8 @@ def get_spectrum(ds_id, ix, minmz, maxmz, npeaks):
     import cPickle as pickle
     assert(minmz<maxmz)
     imzml_fname = get_ds_info(ds_id)['imzml']
-    imzml_idx_fname = imzml_fname+'.idx'
-    if not os.path.exists(imzml_idx_fname):
-        imzml_idx = parse_imzml_index(imzml_fname)
-        pickle.dump(imzml_idx, open(imzml_idx_fname, 'wb'))
-    else:
-        imzml_idx = pickle.load(open(imzml_idx_fname, 'rb'))
+    imzml_idx = get_imzml_index(imzml_fname)
+
     mzs, ints = _getspectrum(imzml_idx, open(imzml_idx['bin_filename'], "rb"), ix)
     mzs, ints = np.asarray(mzs), np.asarray(ints)
     lower_ix, upper_ix = np.searchsorted(mzs, minmz), np.searchsorted(mzs, maxmz)
@@ -37,7 +33,17 @@ ds_info = {
         'imzml': '/home/palmer/Documents/tmp_data/test_dataset/12hour_5_210_centroid.imzML',
         'imzb': '/home/palmer/Documents/tmp_data/test_dataset/12hour_5_210_centroid.imzb'
     },
+    '1': {
+        'name': 'UoM_SI',
+        'imzml': '/home/palmer/Documents/tmp_data/test_dataset/UoM_SI/UoMarylandBaltimore_Pharmacy_SI.imzML',
+        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/UoM_SI/UoMarylandBaltimore_Pharmacy_SI.imzb'
+    },
+    '2': {
+        'name': 'MPI_24',
+        'imzml': '/home/palmer/Documents/tmp_data/test_dataset/MPI_24/MPIMM_024_QE_P_IB_SP2.imzML',
+        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/MPI_24/MPIMM_024_QE_P_IB_SP2.imzML'
 
+    }
 }
 def get_ds_info(id):
     # todo reimplement this in database
@@ -65,12 +71,11 @@ def b64encode(im_vect, im_shape):
     return encoded
 
 def coord_to_ix(ds_id, x, y):
-    from pyimzml import ImzMLParser
     import numpy as np
     imzml_fname = get_ds_info(ds_id)['imzml']
-    imzml = ImzMLParser.ImzMLParser(imzml_fname)
+    imzml_index = get_imzml_index(imzml_fname)
     print x, y
-    ix = np.where([all([c[0]==x, c[1]==y]) for c in imzml.coordinates])[0][0]
+    ix = np.where([all([c[0]==x, c[1]==y]) for c in imzml_index['coordinates']])[0][0]
     return ix
 
 def parse_imzml_index(imzml_filename):
@@ -84,9 +89,20 @@ def parse_imzml_index(imzml_filename):
                  'sizeDict': imzml.sizeDict,
                  'mzPrecision': imzml.mzPrecision,
                  'intensityPrecision': imzml.intensityPrecision,
+                 'coordinates': imzml.coordinates
                  }
     return imzml_idx
 
+def get_imzml_index(imzml_fname):
+    import cPickle as pickle
+    import os
+    imzml_idx_fname = imzml_fname + '.idx'
+    if not os.path.exists(imzml_idx_fname):
+        imzml_idx = parse_imzml_index(imzml_fname)
+        pickle.dump(imzml_idx, open(imzml_idx_fname, 'wb'))
+    else:
+        imzml_idx = pickle.load(open(imzml_idx_fname, 'rb'))
+    return imzml_idx
 
 def _get_spectrum_as_string(imzml_idx, m, index):
     """
