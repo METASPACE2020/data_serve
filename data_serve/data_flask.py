@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, render_template
 from datetime import date
-from utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix
+from utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type
 
 app = Flask(__name__)
 
@@ -22,6 +22,7 @@ def fetch_spectrum(ds_id=None, spec_ix=None):
     minmz =  request.args.get('minmz', '0', type=float)
     maxmz =  request.args.get('maxmz', '1e9', type=float)
     mzs, ints = get_spectrum(ds_id, spec_ix, minmz, maxmz, npeaks)
+    mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
     response = {'ds_id': int(ds_id),
                 'spec_ix': int(spec_ix.strip('/')),
                 'spec' : [(_mz,_int) for _mz, _int in zip(mzs, ints)],
@@ -36,6 +37,7 @@ def fetch_spectrum_xy(ds_id=None, x=None, y=None):
     maxmz =  request.args.get('maxmz', '1e9', type=float)
     spec_ix = coord_to_ix(ds_id, int(x), int(y))
     mzs, ints = get_spectrum(ds_id, spec_ix, float(minmz), float(maxmz), int(npeaks))
+    mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
     response = {'ds_id': int(ds_id),
                 'spec_ix': spec_ix,
                 'spec' : [(_mz,_int) for _mz, _int in zip(mzs, ints)],

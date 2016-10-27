@@ -23,7 +23,9 @@ def get_image(ds_id, mz, ppm):
     from cpyImagingMSpec import ImzbReader
     print mz, ppm
     imzb_fname = get_ds_info(ds_id)['imzb']
+    print imzb_fname
     imzb = ImzbReader(imzb_fname)
+    print imzb.width, imzb.height
     ion_image = imzb.get_mz_image(mz, ppm)
     return ion_image
 
@@ -31,17 +33,20 @@ ds_info = {
     '0': {
         'name': '12hour_5_210',
         'imzml': '/home/palmer/Documents/tmp_data/test_dataset/12hour_5_210_centroid.imzML',
-        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/12hour_5_210_centroid.imzb'
+        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/12hour_5_210_centroid.imzb',
+        'peak_type': 'centroids'
     },
     '1': {
         'name': 'UoM_SI',
         'imzml': '/home/palmer/Documents/tmp_data/test_dataset/UoM_SI/UoMarylandBaltimore_Pharmacy_SI.imzML',
-        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/UoM_SI/UoMarylandBaltimore_Pharmacy_SI.imzb'
+        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/UoM_SI/UoMarylandBaltimore_Pharmacy_SI.imzb',
+        'peak_type': 'centroids'
     },
     '2': {
         'name': 'MPI_24',
         'imzml': '/home/palmer/Documents/tmp_data/test_dataset/MPI_24/MPIMM_024_QE_P_IB_SP2.imzML',
-        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/MPI_24/MPIMM_024_QE_P_IB_SP2.imzML'
+        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/MPI_24/MPIMM_024_QE_P_IB_SP2.imzb',
+        'peak_type': 'centroids'
 
     }
 }
@@ -151,3 +156,19 @@ def _getspectrum(imzml_idx, m, index):
     mz_array = struct.unpack(mz_fmt, mz_string)
     intensity_array = struct.unpack(intensity_fmt, intensity_string)
     return mz_array, intensity_array
+
+def prettify_spectrum(mzs, ints, peak_type='centroids'):
+    import numpy as np
+    print peak_type
+    if peak_type=='centroids':
+        print mzs.shape, ints.shape
+        mzs = np.concatenate([mzs, mzs-0.00001, mzs+0.00001])
+        ints = np.concatenate([ints, np.zeros(2*len(ints))])
+        ix = np.argsort(mzs)
+        print mzs.shape, ints.shape
+        mzs = mzs[ix]
+        ints = ints[ix]
+    return mzs, ints
+
+def peak_type(ds_id):
+    return ds_info[ds_id]['peak_type']
