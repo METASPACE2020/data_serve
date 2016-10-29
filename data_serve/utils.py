@@ -79,7 +79,7 @@ def coord_to_ix(ds_id, x, y):
     import numpy as np
     imzml_fname = get_ds_info(ds_id)['imzml']
     imzml_index = get_imzml_index(imzml_fname)
-    print x, y
+    print x, y, imzml_fname
     ix = np.where([all([c[0]==x, c[1]==y]) for c in imzml_index['coordinates']])[0][0]
     return ix
 
