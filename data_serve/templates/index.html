@@ -1,40 +1,84 @@
 {% extends "layout.html" %}
 {% block body %}
-
-    <h1>Explore a dataset</h1>
-    <p>
-        Dataset ID: <input type="text" size="5" name="ds_id" value="0">
-    <p>
-        m/z <input type="text" size="5" name="m_z"> +/-
-            <input type="text" size="5" name="ppm"> =>
-    <p>
-        <a href=# id="calculate">get image</a>
-
-      <span id="result"></span>
-    <p>
-    <canvas id="ion_image_canvas" width="250px" height="250px"><!-- Ion image will be drawn inside this canvas --></canvas>
-    <div id="spec_view" style="width: 500px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
-
+    <div class="container">
+        <div class="page-header">
+            <h1>Explore a dataset</h1>
+            <p class="lead">View ion images and spectra from a dataset.</p>
+        </div>
+        <h3>Select dataset ID</h3>
+        <p>Dataset ID:
+            <select id="ds_ids">
+            </select>
+            <span id="ds_title"></span>
+            <!-- <input type="text" size="5" name="ds_id" value="0"> -->
+        </p>
+        <div class="row">
+            <div class="col-md-4">
+                <h3>Spatial View</h3>
+                <p>Input an m/z to see the ion image, click on a pixel to view a spectrum</p>
+                <p>
+                    m/z <input type="text" size="5" name="m_z"> +/-
+                    <input type="text" size="5" name="ppm">ppm =>
+                    <a href=# id="calculate">get image</a>
+                </p>
+                     <canvas id="ion_image_canvas" width="250px" height="250px"><!-- Ion image will be drawn inside this canvas --></canvas>
+            </div>
+            <div class="col-md-4">
+                <h3>Spectrum View</h3>
+                <div id="spec_view" style="width: 500px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
+                <p>
+                    <input id = "sum_formula" type="text" size="10" name="sum_formula">
+                    <select id="mySelect" name="adduct_select">
+                        <option value="+_1">M+</option>
+                        <option value="+H_1">M+H</option>
+                        <option value="-_-1">M-</option>
+                        <option value="-H_-1">M-H</option>
+                    </select>
+                    <button type="button" onclick="showIsotopePattern()">Overlay isotope pattern</button>
+                    <p>Intensity: <input id = "isotope_intensity" type="text" size="5" value="1000000"></p>
+                <p>Resolving power: <input id = "resolving_power" type="text" size="5" value="100000"></p>
+                </p>
+            </div>
+        </div>
+    </div>
     <script type="text/javascript">
+        $(document).ready(function(){
+            console.log('doc ready function')
+            $.getJSON($SCRIPT_ROOT + '/_ds/', {})
+                    .done(function(data){
+                        console.log(data);
+                        var options = '';
+                        for (var x = 0; x < data.ds_ids.length; x++) {
+                            options += '<option value="' + data.ds_ids[x] + '">' + data.ds_names[x] + '</option>';
+                        }
+                        $('#ds_ids').html(options);
+                        console.log(options);
+                    })
+                    .fail(function(data){console.log('ds fetch failed')})
+        });
         $(function() {
             var submit_form = function(e) {
-                var ds_id = $('input[name="ds_id"]').val();
+                var ds_id = $('select[id="ds_ids"]').val();
+                console.log(ds_id);
                 var m_z   = $('input[name="m_z"]').val();
                 $.getJSON($SCRIPT_ROOT + ds_id + '/im/' + m_z,
                         {
-                        ppm: $('input[name="ppm"]').val()
-                    },
-                    function(data) {
+                            ppm: $('input[name="ppm"]').val()
+                        })
+                        .done(function(data) {
                             $('input[name=a]').focus().select();
                             var canvas = document.getElementById("ion_image_canvas");
                             var ctx = canvas.getContext("2d");
                             var background = new Image();
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
                             background.src = 'data:image/png;base64,' + data.b64_im;
                             background.onload = function(){
                                 ctx.drawImage(background,0,0);
                             }
-                    }
-                );
+                        })
+                        .fail(function() {
+                        console.log( "image fetch failed" );
+                        });
                 return false;
             };
             $('a#calculate').bind('click', submit_form);
@@ -45,27 +89,94 @@
             });
             $('input[name=a]').focus();
         });
-    </script>
 
-    <script>
+        function showIsotopePattern() {
+            var sf = $('input[name="sum_formula"]').val();
+            var adduct = $('select[name="adduct_select"]').val();
+            console.log([sf, adduct]);
+            $.getJSON($SCRIPT_ROOT + '/_isotope/' + sf +"/" + adduct + "/", {resolving_power: $('input[id="resolving_power"]').val()})
+                    .done(function(data){
+                        addIsotopePlot(data, name="Isotope: " + sf + adduct)
+                    })
+                    .fail(function() {
+                        console.log( "isotope fetch failed" );
+                    });
+
+            }
+
+        function addIsotopePlot(data){
+            var test = (typeof minmz !== 'undefined') ?  name : '';
+            console.log(data.sf);
+            // format data
+            var spec = parseSpectrumData(data);
+            // add named trace to plot
+            var plotDiv = document.getElementById("spec_view");
+            var intensity = Number($('input[id="isotope_intensity"]').val())/100.; //divide 100 as isopattern returns %
+            for (var i=0; i<plotDiv.data.length; i++){
+                if (plotDiv.data[i].name == data.sf)
+                    {
+                        Plotly.deleteTraces(plotDiv, i);
+                    }
+            }
+            var traces = [{
+                    x: spec[0],
+                    y: spec[1].map(function(x) { return x * intensity; }),
+                    'name': data.sf
+                }];
+            Plotly.plot(plotDiv, traces);
+            Plotly.moveTraces(plotDiv, -1, 0);
+
+        }
+
+        function addListener(plotDiv) {
+            plotDiv.on('plotly_relayout',
+            //plotDiv.on('mouse_up',
+                    function (eventdata) {
+                        console.log( 'ZOOM!' + '\n\n' +
+            'Event data:' + '\n' +
+             JSON.stringify(eventdata) + '\n\n' +
+            'x-axis start:' + eventdata['xaxis.range[0]'] + '\n' +
+            'x-axis end:' + eventdata['xaxis.range[1]'] );
+                        console.log('update spectrum');
+                        updateSpectrum({x: c_x, y: c_y}, eventdata['xaxis.range[0]'], eventdata['xaxis.range[1]']);
+                    });
+        }
+
+        function removeListener(plotDiv) {
+            plotDiv.on('plotly_relayout',
+                    function (eventdata) {
+                    });
+        }
+
+        function parseSpectrumData(json_data){
+            var x = [], y = [];
+            for (var i = 0; i < json_data.spec.length; i++) {
+                row = json_data.spec[i];
+                x.push(row[0]);
+                y.push(row[1]);
+            }
+            return [x, y]
+        }
+
         function updateSpectrum(x_y, minmz, maxmz, npeaks){
             var minmz = (typeof minmz !== 'undefined') ?  minmz : 0;
             var maxmz = (typeof maxmz !== 'undefined') ?  maxmz : 1e9;
             var npeaks = (typeof npeaks !== 'undefined') ?  npeaks : 500;
-            var ds_id = $('input[name="ds_id"]').val();
+            var ds_id = $('select[id="ds_ids"]').val();
             $.getJSON($SCRIPT_ROOT + ds_id + '/spec_xy/' + x_y.x +"/" + x_y.y + "/",
                     {npeaks: npeaks,
                      minmz: minmz,
                      maxmz: maxmz
                     })
                     .done(function(data) {
-                        makeplot(data)
-                        console.log( "success" );
+                        console.log( "ajax: got spec data" );
+                        updateSpectrumPlot(data)
                     })
                     .fail(function() {
                         console.log( "error" );
                     });
         }
+
         function writeMessage(canvas, message) {
             var context = canvas.getContext('2d');
             context.clearRect(0, 0, canvas.width, canvas.height);
@@ -73,6 +184,7 @@
             context.fillStyle = 'black';
             context.fillText(message, 10, 25);
         }
+
         function getMousePos(canvas, evt) {
             var rect = canvas.getBoundingClientRect();
             return {
@@ -82,6 +194,47 @@
                 y: Math.floor((evt.clientY-rect.top)/(rect.bottom-rect.top)*canvas.height)
             };
         }
+
+        function updateSpectrumPlot(json_data){
+            var spec = parseSpectrumData(json_data);
+            var x = spec[0], y = spec[1];
+            c_x = json_data.x; // global - current pixel
+            c_y = json_data.y; // global - current pixel
+            var traces = [{
+                    x: x,
+                    y: y,
+                    name: 'Spectrum',
+                    line: {
+                    color: 'black'
+                     }
+                }];
+            var y_max = Math.max(y);
+            var layout = {
+                title: 'Spectrum from (' + c_x + ' ' + c_y + ')',
+                yaxis: {range: [0, y_max]}
+                };
+            console.log('deleting old trace');
+            var plotData = plotDiv.data;
+            for (var i=0; i<plotData.length; i++){
+                if (plotData[i].name == 'Spectrum')
+                    {
+                        Plotly.deleteTraces(plotDiv, i);
+                    }
+            }
+            //plotDiv.data.push({x: x, y: y, name: 'Spectrum'});
+            //Plotly.relayout(plotDiv, layout)
+            //Plotly.redraw(plotDiv);
+            //Plotly.newPlot(plotDiv, traces, layout);
+            Plotly.plot(plotDiv, traces, layout);
+        }
+
+        // Put an empty plot into the plotly div
+        var c_x = 0; // global  - current pixel
+        var c_y = 0; // global - current pixel
+        var plotDiv = document.getElementById("spec_view");
+	    Plotly.plot(plotDiv, [{x:[0], y:[0], name:'Spectrum'}]);
+        addListener(plotDiv, c_x, c_y)
+        // set mouse listener for canvas
         var canvas = document.getElementById('ion_image_canvas');
         var canvas_write = document.getElementById('mouse_pos');
         var context = canvas.getContext('2d');
@@ -92,51 +245,5 @@
             //writeMessage(canvas_write, message);
             updateSpectrum(mousePos)
         }, false);
-
-        function makeplot(data){
-            processData(data)
-        }
-
-        function processData(json_data) {
-            var x = [], y = [], standard_deviation = [];
-
-            for (var i = 0; i < json_data.spec.length; i++) {
-                row = json_data.spec[i];
-                x.push(row[0]);
-                y.push(row[1]);
-            }
-            makePlotly(x, y, json_data.x, json_data.y);
-        }
-
-        function makePlotly( x, y, c_x, c_y ){
-            console.log(x)
-            var plotDiv = document.getElementById("spec_view");
-            var traces = [{
-                    x: x,
-                    y: y,
-                    //line: {
-                    //color: 'black',
-                     //}
-
-                }];
-            var layout = {
-                title: 'Spectrum from (' + c_x + ' ' + c_y + ')'
-                yaxis: {range: [0, Math.max(y)]}
-                }
-            Plotly.Plot(plotDiv, traces, layout);
-            plotDiv.on('plotly_relayout',
-                function(eventdata){
-                    //alert( 'ZOOM!' + '\n\n' +
-                    //   'Event data:' + '\n' +
-                    //     JSON.stringify(eventdata) + '\n\n' +
-                    //    'x-axis start:' + eventdata['xaxis.range[0]'] + '\n' +
-                    //    'x-axis end:' + eventdata['xaxis.range[1]'] );
-                    console.log('update trace')
-                    console.log(eventdata)
-                    updateSpectrum({x: c_x, y: c_y}, eventdata['xaxis.range[0]'], eventdata['xaxis.range[1]'])
-                    Plotly.deleteTraces(plotDiv, 0);
-                });
-        };
-
     </script>
 {% endblock %}

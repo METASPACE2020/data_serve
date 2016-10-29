@@ -1,16 +1,16 @@
 from flask import Flask, jsonify, request, render_template
 from datetime import date
-from utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type
+from utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern
 
 app = Flask(__name__)
 
-@app.route('/version')
+@app.route('/_version')
 def version():
     response = {'version': '3.5.1',
                 'last_build': date.today().isoformat()}
     return jsonify(response)
 
-@app.route('/ds/')
+@app.route('/_ds/')
 def fetch_datasets():
     ds_names, ds_ids = get_all_dataset_names_and_ids()
     response = {'ds_names': ds_names, 'ds_ids': ds_ids}
@@ -64,9 +64,19 @@ def fetch_image(ds_id=None, mz=None):
     return jsonify(response)
 
 
-@app.route('/canvas_test/')
-def canvas_test():
-    return render_template('canvas_test.html')
+@app.route('/_isotope/<sf>/<a_charge>/')
+def generate_isotope_pattern(sf, a_charge):
+    rp = request.args.get('resolving_power', '100000', type=float)
+    a, chg = a_charge.split('_')
+    sf = sf+a
+    print sf, rp
+    spec = get_isotope_pattern(sf, resolving_power=rp, instrument_type='tof', at_mz=None, cutoff_perc=0.1, charge=None, pts_per_mz=10000)
+    p_spec = spec.get_spectrum(source='profile')
+    response = {
+        'sf': sf,
+        'spec': [("{:3.5f}".format(_mz), "{:3.2f}".format(_int)) for _mz, _int in zip(*p_spec) if _int>0.01]
+    }
+    return jsonify(response)
 
 
 @app.route('/')
