@@ -159,16 +159,40 @@ def _getspectrum(imzml_idx, m, index):
 
 def prettify_spectrum(mzs, ints, peak_type='centroids'):
     import numpy as np
-    print peak_type
     if peak_type=='centroids':
-        print mzs.shape, ints.shape
         mzs = np.concatenate([mzs, mzs-0.00001, mzs+0.00001])
         ints = np.concatenate([ints, np.zeros(2*len(ints))])
         ix = np.argsort(mzs)
-        print mzs.shape, ints.shape
         mzs = mzs[ix]
         ints = ints[ix]
     return mzs, ints
 
 def peak_type(ds_id):
     return ds_info[ds_id]['peak_type']
+
+
+def get_isotope_pattern(sf, resolving_power=100000, instrument_type='tof', at_mz=None, cutoff_perc=0.1, charge=None, pts_per_mz=10000, **kwargs):
+    from cpyMSpec import isotopePattern, InstrumentModel, ProfileSpectrum
+    # layer of compatibility with the original pyMSpec.pyisocalc module
+    from pyMSpec.mass_spectrum import MassSpectrum
+    import numpy as np
+    if charge is None:
+        charge = 1
+    cutoff = cutoff_perc / 100.0
+    abs_charge = max(1, abs(charge))
+    p = isotopePattern(str(sf), cutoff / 10.0)
+    p.addCharge(charge)
+    mzs = np.arange(min(p.masses) / abs_charge - 1,
+                    max(p.masses) / abs_charge + 1, 1.0/pts_per_mz)
+    instr = InstrumentModel(instrument_type, float(resolving_power))
+    intensities = np.asarray(p.envelope(instr)(mzs * abs_charge))
+    intensities *= 100.0 / intensities.max()
+
+    ms = MassSpectrum()
+    ms.add_spectrum(mzs, intensities)
+
+    p = ProfileSpectrum(mzs, intensities).centroids(5)
+    p.removeIntensitiesBelow(cutoff)
+    p.sortByMass()
+    ms.add_centroids(p.masses, np.array(p.intensities))
+    return ms
