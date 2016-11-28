@@ -1,15 +1,21 @@
-def get_spectrum(ds_id, ix, minmz, maxmz, npeaks):
+def get_spectrum(ds_id, ix, minmz=None, maxmz=None, npeaks=None):
     from pyimzml import ImzMLParser
     import numpy as np
     import os
     import cPickle as pickle
-    assert(minmz<maxmz)
     imzml_fname = get_ds_info(ds_id)['imzml']
     imzml_idx = get_imzml_index(imzml_fname)
 
     mzs, ints = _getspectrum(imzml_idx, open(imzml_idx['bin_filename'], "rb"), ix)
     mzs, ints = np.asarray(mzs), np.asarray(ints)
-    lower_ix, upper_ix = np.searchsorted(mzs, minmz), np.searchsorted(mzs, maxmz)
+    if minmz:
+        lower_ix = np.searchsorted(mzs, float(minmz))
+    else:
+        lower_ix = 0
+    if maxmz:
+        upper_ix = np.searchsorted(mzs, float(maxmz))
+    else:
+        upper_ix = len(mzs)
     sort_ix = np.argsort(ints[lower_ix:upper_ix])
     to_return = sort_ix + lower_ix
     if npeaks < len(to_return):
@@ -21,38 +27,22 @@ def get_spectrum(ds_id, ix, minmz, maxmz, npeaks):
 
 def get_image(ds_id, mz, ppm):
     from cpyImagingMSpec import ImzbReader
+    import numpy as np
     print mz, ppm
     imzb_fname = get_ds_info(ds_id)['imzb']
     print imzb_fname
     imzb = ImzbReader(imzb_fname)
     print imzb.width, imzb.height
     ion_image = imzb.get_mz_image(mz, ppm)
-    return ion_image
+    return ion_image.T
 
-ds_info = {
-    '0': {
-        'name': '12hour_5_210',
-        'imzml': '/home/palmer/Documents/tmp_data/test_dataset/12hour_5_210_centroid.imzML',
-        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/12hour_5_210_centroid.imzb',
-        'peak_type': 'centroids'
-    },
-    '1': {
-        'name': 'UoM_SI',
-        'imzml': '/home/palmer/Documents/tmp_data/test_dataset/UoM_SI/UoMarylandBaltimore_Pharmacy_SI.imzML',
-        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/UoM_SI/UoMarylandBaltimore_Pharmacy_SI.imzb',
-        'peak_type': 'centroids'
-    },
-    '2': {
-        'name': 'MPI_24',
-        'imzml': '/home/palmer/Documents/tmp_data/test_dataset/MPI_24/MPIMM_024_QE_P_IB_SP2.imzML',
-        'imzb': '/home/palmer/Documents/tmp_data/test_dataset/MPI_24/MPIMM_024_QE_P_IB_SP2.imzb',
-        'peak_type': 'centroids'
+DS_INFO_FILENAME = 'data_serve/ds_info.json'
 
-    }
-}
 def get_ds_info(id):
     # todo reimplement this in database
     # quick hack -> this will go into the database
+    import json
+    ds_info = json.load(open(DS_INFO_FILENAME))
     return ds_info[id]
 
 def get_ds_name(ds_id):
@@ -60,18 +50,22 @@ def get_ds_name(ds_id):
 
 
 def get_all_dataset_names_and_ids():
+    import json
+    import numpy as np
+    ds_info = json.load(open(DS_INFO_FILENAME))
     ds_ids = ds_info.keys()
     ds_names = [ds_info[k]['name'] for k in ds_ids]
-    return ds_names, ds_ids
+    ord = np.argsort(ds_names)
+    return [ds_names[_n] for _n in ord],  [ds_ids[_n] for _n in ord]
 
 
-def b64encode(im_vect, im_shape):
+def b64encode(im_vect, im_shape, colormap_name='viridis'):
     import base64
     import matplotlib.pyplot as plt
     import numpy as np
     import StringIO
     in_memory_path  = StringIO.StringIO()
-    plt.imsave(in_memory_path, np.reshape(im_vect, im_shape))
+    plt.imsave(in_memory_path, np.reshape(im_vect, im_shape), cmap=plt.get_cmap(colormap_name))
     encoded = base64.b64encode(in_memory_path.getvalue())
     return encoded
 
@@ -80,6 +74,7 @@ def coord_to_ix(ds_id, x, y):
     imzml_fname = get_ds_info(ds_id)['imzml']
     imzml_index = get_imzml_index(imzml_fname)
     print x, y, imzml_fname
+    print np.min(imzml_index['coordinates'], axis=0), np.max(imzml_index['coordinates'], axis=0)
     ix = np.where([all([c[0]==x, c[1]==y]) for c in imzml_index['coordinates']])[0][0]
     return ix
 
@@ -165,9 +160,13 @@ def prettify_spectrum(mzs, ints, peak_type='centroids'):
         ix = np.argsort(mzs)
         mzs = mzs[ix]
         ints = ints[ix]
+    elif peak_type=='profile':
+        pass
     return mzs, ints
 
 def peak_type(ds_id):
+    import json
+    ds_info = json.load(open(DS_INFO_FILENAME))
     return ds_info[ds_id]['peak_type']
 
 
@@ -184,7 +183,7 @@ def get_isotope_pattern(sf, resolving_power=100000, instrument_type='tof', at_mz
     p.addCharge(charge)
     mzs = np.arange(min(p.masses) / abs_charge - 1,
                     max(p.masses) / abs_charge + 1, 1.0/pts_per_mz)
-    instr = InstrumentModel(instrument_type, float(resolving_power))
+    instr = InstrumentModel(instrument_type, resolving_power)
     intensities = np.asarray(p.envelope(instr)(mzs * abs_charge))
     intensities *= 100.0 / intensities.max()
 
@@ -196,3 +195,11 @@ def get_isotope_pattern(sf, resolving_power=100000, instrument_type='tof', at_mz
     p.sortByMass()
     ms.add_centroids(p.masses, np.array(p.intensities))
     return ms
+
+def scan_folder_for_imzml(folder):
+    import os
+    for root, dirs, files in  os.walk(folder):
+        if 'CVS' in files:
+            print files
+
+
