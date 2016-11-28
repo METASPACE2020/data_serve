@@ -1,0 +1,9 @@
+{
+  "0": {
+    "name": "test_dataset",
+    "imzml": "/tests/data/Untreated_3_546_centroid.imzML",
+    "imzb":  "/tests/data/Untreated_3_546_centroid.imzb",
+    "peak_type": "centroids"
+  }
+}
+
