@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, render_template
 from datetime import date
 from utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern
+import numpy as np
 
 app = Flask(__name__)
 
@@ -19,13 +20,15 @@ def fetch_datasets():
 @app.route('/<ds_id>/spec/<spec_ix>')
 def fetch_spectrum(ds_id=None, spec_ix=None):
     npeaks = request.args.get('npeaks', '25', type=int)
-    minmz =  request.args.get('minmz', '0', type=float)
-    maxmz =  request.args.get('maxmz', '1e9', type=float)
+    minmz =  request.args.get('minmz', None, type=float)
+    maxmz =  request.args.get('maxmz', None, type=float)
     mzs, ints = get_spectrum(ds_id, spec_ix, minmz, maxmz, npeaks)
     mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
     response = {'ds_id': int(ds_id),
                 'spec_ix': int(spec_ix.strip('/')),
                 'spec' : [(_mz,_int) for _mz, _int in zip(mzs, ints)],
+                'xstart': minmz,
+                'xend': maxmz,
                 }
     return jsonify(response)
 
@@ -33,16 +36,18 @@ def fetch_spectrum(ds_id=None, spec_ix=None):
 @app.route('/<ds_id>/spec_xy/<x>/<y>/')
 def fetch_spectrum_xy(ds_id=None, x=None, y=None):
     npeaks = request.args.get('npeaks', '25', type=int)
-    minmz =  request.args.get('minmz', '0.', type=float)
-    maxmz =  request.args.get('maxmz', '1e9', type=float)
+    minmz =  request.args.get('minmz', None, type=float)
+    maxmz =  request.args.get('maxmz', None, type=float)
     spec_ix = coord_to_ix(ds_id, int(x), int(y))
-    mzs, ints = get_spectrum(ds_id, spec_ix, float(minmz), float(maxmz), int(npeaks))
+    mzs, ints = get_spectrum(ds_id, spec_ix, minmz, maxmz, int(npeaks))
     mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
     response = {'ds_id': int(ds_id),
                 'spec_ix': spec_ix,
                 'spec' : [(_mz,_int) for _mz, _int in zip(mzs, ints)],
                 'x': x,
                 'y': y,
+                'xstart': minmz,
+                'xend': maxmz,
                 }
     return jsonify(response)
 
@@ -58,7 +63,8 @@ def fetch_image(ds_id=None, mz=None):
                 'mz': mz,
                 'ppm': ppm,
                 'im_shape': im.shape,
-                'im_vect' : im_vect,
+                'min_intensity' : np.min(im_vect),
+                'max_intensity': np.max(im_vect),
                 'b64_im': b64encode(im_vect, im.shape)
                 }
     return jsonify(response)
@@ -69,8 +75,8 @@ def generate_isotope_pattern(sf, a_charge):
     rp = request.args.get('resolving_power', '100000', type=float)
     a, chg = a_charge.split('_')
     sf = sf+a
-    print sf, rp
-    spec = get_isotope_pattern(sf, resolving_power=rp, instrument_type='tof', at_mz=None, cutoff_perc=0.1, charge=None, pts_per_mz=10000)
+    print sf, rp, int(chg)
+    spec = get_isotope_pattern(sf, resolving_power=float(rp), instrument_type='tof', at_mz=None, cutoff_perc=0.1, charge=int(chg), pts_per_mz=10000)
     p_spec = spec.get_spectrum(source='profile')
     response = {
         'sf': sf,
