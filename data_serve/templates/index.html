@@ -13,17 +13,17 @@
             <!-- <input type="text" size="5" name="ds_id" value="0"> -->
         </p>
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <h3>Spatial View</h3>
                 <p>Input an m/z to see the ion image, click on a pixel to view a spectrum</p>
                 <p>
-                    m/z <input type="text" size="5" name="m_z"> +/-
-                    <input type="text" size="5" name="ppm">ppm =>
+                    m/z <input type="text" size="10" name="m_z" value="1"> +/-
+                    <input type="text" size="5" name="ppm" value="1">ppm =>
                     <a href=# id="calculate">get image</a>
                 </p>
-                     <canvas id="ion_image_canvas" width="250px" height="250px"><!-- Ion image will be drawn inside this canvas --></canvas>
+                     <canvas id="ion_image_canvas" width="1000px" height="1000px"><!-- Ion image will be drawn inside this canvas --></canvas>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <h3>Spectrum View</h3>
                 <div id="spec_view" style="width: 500px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
                 <p>
@@ -31,31 +31,35 @@
                     <select id="mySelect" name="adduct_select">
                         <option value="+_1">M+</option>
                         <option value="+H_1">M+H</option>
+                        <option value="+Na_1">M+Na</option>
+                        <option value="+K_1">M+K</option>
                         <option value="-_-1">M-</option>
                         <option value="-H_-1">M-H</option>
                     </select>
                     <button type="button" onclick="showIsotopePattern()">Overlay isotope pattern</button>
+                    <button type="button" onclick="clearIsotopePattern()">Clear isotope patterns</button>
+
                     <p>Intensity: <input id = "isotope_intensity" type="text" size="5" value="1000000"></p>
                 <p>Resolving power: <input id = "resolving_power" type="text" size="5" value="100000"></p>
+                <p><input type="checkbox" id="holdSpectrum">: Hold Spectra</p>
                 </p>
             </div>
         </div>
     </div>
     <script type="text/javascript">
-        $(document).ready(function(){
-            console.log('doc ready function')
+
+        function refreshDatasetSelect(){
             $.getJSON($SCRIPT_ROOT + '/_ds/', {})
                     .done(function(data){
-                        console.log(data);
                         var options = '';
                         for (var x = 0; x < data.ds_ids.length; x++) {
                             options += '<option value="' + data.ds_ids[x] + '">' + data.ds_names[x] + '</option>';
                         }
                         $('#ds_ids').html(options);
-                        console.log(options);
                     })
                     .fail(function(data){console.log('ds fetch failed')})
-        });
+        }
+
         $(function() {
             var submit_form = function(e) {
                 var ds_id = $('select[id="ds_ids"]').val();
@@ -113,7 +117,7 @@
             var plotDiv = document.getElementById("spec_view");
             var intensity = Number($('input[id="isotope_intensity"]').val())/100.; //divide 100 as isopattern returns %
             for (var i=0; i<plotDiv.data.length; i++){
-                if (plotDiv.data[i].name == data.sf)
+                if (plotDiv.data[i].name == "Isotope:" + data.sf)
                     {
                         Plotly.deleteTraces(plotDiv, i);
                     }
@@ -121,11 +125,36 @@
             var traces = [{
                     x: spec[0],
                     y: spec[1].map(function(x) { return x * intensity; }),
-                    'name': data.sf
+                    'name': "Isotope:" + data.sf
                 }];
             Plotly.plot(plotDiv, traces);
             Plotly.moveTraces(plotDiv, -1, 0);
+        }
 
+        function clearIsotopePattern(){
+            var plotData = plotDiv.data;
+            var to_delete = [];
+            for (var i=0; i<plotData.length; i++){
+                if (plotData[i].name.startsWith("Isotope:"))
+                    {
+                        to_delete.push(i)
+                    }
+            }
+            Plotly.deleteTraces(plotDiv, to_delete);
+        }
+
+        function clearSpectrumPlot(){
+            var plotData = plotDiv.data;
+            var to_delete = [];
+            for (var i=0; i<plotData.length; i++){
+                console.log(plotData[i].name, plotData[i].name.startsWith("Spectrum"));
+                if (plotData[i].name.startsWith("Spectrum"))
+                    {
+                        console.log('clear trace');
+                        to_delete.push(i)
+                    }
+            }
+            Plotly.deleteTraces(plotDiv, to_delete);
         }
 
         function addListener(plotDiv) {
@@ -159,11 +188,13 @@
         }
 
         function updateSpectrum(x_y, minmz, maxmz, npeaks){
-            var minmz = (typeof minmz !== 'undefined') ?  minmz : 0;
-            var maxmz = (typeof maxmz !== 'undefined') ?  maxmz : 1e9;
+            var minmz = (typeof minmz !== 'undefined') ?  minmz : null;
+            var maxmz = (typeof maxmz !== 'undefined') ?  maxmz : null;
             var npeaks = (typeof npeaks !== 'undefined') ?  npeaks : 500;
             var ds_id = $('select[id="ds_ids"]').val();
-            $.getJSON($SCRIPT_ROOT + ds_id + '/spec_xy/' + x_y.x +"/" + x_y.y + "/",
+            for(var ii=0;ii<spectra_stack.length; ii++){
+                console.log(spectra_stack[ii]);
+                $.getJSON($SCRIPT_ROOT + ds_id + '/spec_xy/' + spectra_stack[ii].x +"/" + spectra_stack[ii].y + "/",
                     {npeaks: npeaks,
                      minmz: minmz,
                      maxmz: maxmz
@@ -175,6 +206,7 @@
                     .fail(function() {
                         console.log( "error" );
                     });
+            }
         }
 
         function writeMessage(canvas, message) {
@@ -198,52 +230,74 @@
         function updateSpectrumPlot(json_data){
             var spec = parseSpectrumData(json_data);
             var x = spec[0], y = spec[1];
-            c_x = json_data.x; // global - current pixel
-            c_y = json_data.y; // global - current pixel
+            var _x = json_data.x; // global - current pixel
+            var _y = json_data.y; // global - current pixel
             var traces = [{
                     x: x,
                     y: y,
-                    name: 'Spectrum',
+                    name: 'Spectrum from (' + _x + ' ' + _y + ')',
                     line: {
-                    color: 'black'
+                        //color: 'black'
                      }
                 }];
             var y_max = Math.max(y);
-            var layout = {
-                title: 'Spectrum from (' + c_x + ' ' + c_y + ')',
-                yaxis: {range: [0, y_max]}
+            var layouts = {
+                    title: 'Spectrum from (' + _x + ' ' + _y + ')',
+                    yaxis: {range: [0, y_max]},
+                    showlegend: true,
+                    legend: {
+                        x: 0.8,
+                        y: 1
+                    }
                 };
-            console.log('deleting old trace');
+            // mark old traces for deletion
             var plotData = plotDiv.data;
+            var to_delete = [];
             for (var i=0; i<plotData.length; i++){
-                if (plotData[i].name == 'Spectrum')
+                if (plotData[i].name == ('Spectrum from (' + _x + ' ' + _y + ')'))
                     {
-                        Plotly.deleteTraces(plotDiv, i);
+                        to_delete.push(i)
                     }
             }
-            //plotDiv.data.push({x: x, y: y, name: 'Spectrum'});
-            //Plotly.relayout(plotDiv, layout)
-            //Plotly.redraw(plotDiv);
-            //Plotly.newPlot(plotDiv, traces, layout);
-            Plotly.plot(plotDiv, traces, layout);
+            Plotly.deleteTraces(plotDiv, to_delete);
+
+            Plotly.plot(plotDiv, traces, layouts);
+            console.log('deleting old trace');
         }
 
         // Put an empty plot into the plotly div
+        var canvas = document.getElementById('ion_image_canvas');
         var c_x = 0; // global  - current pixel
         var c_y = 0; // global - current pixel
         var plotDiv = document.getElementById("spec_view");
+        var spectra_stack = [];
 	    Plotly.plot(plotDiv, [{x:[0], y:[0], name:'Spectrum'}]);
-        addListener(plotDiv, c_x, c_y)
+        addListener(plotDiv);
         // set mouse listener for canvas
-        var canvas = document.getElementById('ion_image_canvas');
-        var canvas_write = document.getElementById('mouse_pos');
         var context = canvas.getContext('2d');
         var text = document.getElementById('spec_string');
-        canvas.addEventListener('mouseup', function(evt) {
+        $(document).ready(function(){
+            console.log('doc ready function');
+            refreshDatasetSelect();
+            canvas.addEventListener('mouseup', function(evt) {
             var mousePos = getMousePos(canvas, evt);
-            var message = 'Mouse position: ' + mousePos.x + ',' + mousePos.y;
+            //var message = 'Mouse position: ' + mousePos.x + ',' + mousePos.y;
             //writeMessage(canvas_write, message);
-            updateSpectrum(mousePos)
+            var hold_value = document.getElementById("holdSpectrum").checked;
+            if (hold_value){
+                spectra_stack.push(mousePos);
+                xRange = plotDiv.layout.xaxis.range;
+                var min_mz = xRange[0];
+                var max_mz = xRange[1];
+                updateSpectrum(mousePos, min_mz, max_mz)
+            } else {
+                console.log('clear spectrum');
+                clearSpectrumPlot();
+                spectra_stack = [mousePos];
+                updateSpectrum(mousePos)
+            }
+
         }, false);
+        });
     </script>
 {% endblock %}
