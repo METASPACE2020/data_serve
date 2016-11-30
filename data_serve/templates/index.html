@@ -21,7 +21,7 @@
                     <input type="text" size="5" name="ppm" value="1">ppm =>
                     <a href=# id="calculate">get image</a>
                 </p>
-                     <canvas id="ion_image_canvas" width="1000px" height="1000px"><!-- Ion image will be drawn inside this canvas --></canvas>
+                     <canvas id="ion_image_canvas" width="500px" height="800px"><!-- Ion image will be drawn inside this canvas --></canvas>
             </div>
             <div class="col-md-6">
                 <h3>Spectrum View</h3>
@@ -60,6 +60,26 @@
                     .fail(function(data){console.log('ds fetch failed')})
         }
 
+
+        function showIonImage(data) {
+            var canvas = document.getElementById("ion_image_canvas");
+            var ctx = canvas.getContext("2d");
+            var background = new Image();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            background.src = 'data:image/png;base64,' + data.b64_im;
+            background.onload = function(){
+                // scale up small images to use as much canvas as possible
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                var scale1 = Math.floor(canvas.width / background.width);
+                var scale2 = Math.floor(canvas.height / background.height);
+                var commonScale = Math.max(1, Math.min(scale1, scale2));
+                canvasScaleX = canvasScaleY = commonScale;
+                ctx.scale(canvasScaleX, canvasScaleY);
+
+                ctx.drawImage(background, 0, 0);
+            }
+        }
+
         $(function() {
             var submit_form = function(e) {
                 var ds_id = $('select[id="ds_ids"]').val();
@@ -71,15 +91,7 @@
                         })
                         .done(function(data) {
                             $('input[name=a]').focus().select();
-                            var canvas = document.getElementById("ion_image_canvas");
-                            var ctx = canvas.getContext("2d");
-                            var background = new Image();
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
-                            console.log(data);
-                            background.src = 'data:image/png;base64,' + data.b64_im;
-                            background.onload = function(){
-                                ctx.drawImage(background,0,0);
-                            }
+                            showIonImage(data);
                         })
                         .fail(function() {
                         console.log( "image fetch failed" );
@@ -144,7 +156,7 @@
             Plotly.deleteTraces(plotDiv, to_delete);
         }
 
-        function clearSpectrumPlot(){
+        function clearSpectrumPlot() {
             var plotData = plotDiv.data;
             var to_delete = [];
             for (var i=0; i<plotData.length; i++){
@@ -158,24 +170,16 @@
             Plotly.deleteTraces(plotDiv, to_delete);
         }
 
-        function addListener(plotDiv) {
-            plotDiv.on('plotly_relayout',
-            //plotDiv.on('mouse_up',
-                    function (eventdata) {
-                        console.log( 'ZOOM!' + '\n\n' +
-            'Event data:' + '\n' +
-             JSON.stringify(eventdata) + '\n\n' +
-            'x-axis start:' + eventdata['xaxis.range[0]'] + '\n' +
-            'x-axis end:' + eventdata['xaxis.range[1]'] );
-                        console.log('update spectrum');
-                        updateSpectrum({x: c_x, y: c_y}, eventdata['xaxis.range[0]'], eventdata['xaxis.range[1]']);
-                    });
-        }
-
-        function removeListener(plotDiv) {
-            plotDiv.on('plotly_relayout',
-                    function (eventdata) {
-                    });
+        function spectrumZoomHandler(eventdata) {
+            console.log( 'ZOOM!' + '\n\n' +
+                         'Event data:' + '\n' +
+                         JSON.stringify(eventdata) + '\n\n' +
+                         'x-axis start:' + eventdata['xaxis.range[0]'] + '\n' +
+                         'x-axis end:' + eventdata['xaxis.range[1]'] );
+            console.log('update spectrum');
+            updateSpectrum({x: c_x, y: c_y},
+                           eventdata['xaxis.range[0]'],
+                           eventdata['xaxis.range[1]']);
         }
 
         function parseSpectrumData(json_data){
@@ -218,13 +222,14 @@
             context.fillText(message, 10, 25);
         }
 
-        function getMousePos(canvas, evt) {
-            var rect = canvas.getBoundingClientRect();
+        function getMousePos(evt) {
+            var canvas = evt.target,
+                rect = canvas.getBoundingClientRect(),
+                scaleX = canvas.width / rect.width,
+                scaleY = canvas.height / rect.height;
             return {
-              //x: evt.clientX - rect.left,
-              //y: evt.clientY - rect.top
-                x: Math.floor((evt.clientX-rect.left)/(rect.right-rect.left)*canvas.width),
-                y: Math.floor((evt.clientY-rect.top)/(rect.bottom-rect.top)*canvas.height)
+                x: (evt.clientX - rect.left) * scaleX,
+                y: (evt.clientY - rect.top) * scaleY
             };
         }
 
@@ -234,31 +239,31 @@
             var _x = json_data.x; // global - current pixel
             var _y = json_data.y; // global - current pixel
             var traces = [{
-                    x: x,
-                    y: y,
-                    name: 'Spectrum from (' + _x + ' ' + _y + ')',
-                    line: {
-                        //color: 'black'
-                     }
-                }];
+                x: x,
+                y: y,
+                name: 'Spectrum from (' + _x + ' ' + _y + ')',
+                line: {
+                    //color: 'black'
+                }
+            }];
             var y_max = Math.max(y);
             var layouts = {
-                    title: 'Spectrum from (' + _x + ' ' + _y + ')',
-                    yaxis: {range: [0, y_max]},
-                    showlegend: true,
-                    legend: {
-                        x: 0.8,
-                        y: 1
-                    }
-                };
+                title: 'Spectrum from (' + _x + ' ' + _y + ')',
+                yaxis: {range: [0, y_max]},
+                showlegend: true,
+                legend: {
+                    x: 0.8,
+                    y: 1
+                }
+            };
             // mark old traces for deletion
             var plotData = plotDiv.data;
             var to_delete = [];
             for (var i=0; i<plotData.length; i++){
                 if (plotData[i].name == ('Spectrum from (' + _x + ' ' + _y + ')'))
-                    {
-                        to_delete.push(i)
-                    }
+                {
+                    to_delete.push(i)
+                }
             }
             Plotly.deleteTraces(plotDiv, to_delete);
 
@@ -267,38 +272,50 @@
         }
 
         // Put an empty plot into the plotly div
-        var canvas = document.getElementById('ion_image_canvas');
-        var c_x = 0; // global  - current pixel
-        var c_y = 0; // global - current pixel
-        var plotDiv = document.getElementById("spec_view");
-        var spectra_stack = [];
+        var c_x = 0, // global  - current pixel
+            c_y = 0, // global - current pixel
+            plotDiv = document.getElementById("spec_view"),
+            spectra_stack = [],
+            canvasScaleX = 1,
+            canvasScaleY = 1;
         Plotly.plot(plotDiv, [{x:[0], y:[0], name:'Spectrum'}]);
-        addListener(plotDiv);
-        // set mouse listener for canvas
-        var context = canvas.getContext('2d');
+        plotDiv.on('plotly_relayout', spectrumZoomHandler);
         var text = document.getElementById('spec_string');
-        $(document).ready(function(){
-            console.log('doc ready function');
-            refreshDatasetSelect();
-            canvas.addEventListener('mouseup', function(evt) {
-            var mousePos = getMousePos(canvas, evt);
+
+        function ionImageClickHandler(evt) {
+            var mousePos = getMousePos(evt);
+            var imgPos = {x: Math.floor(mousePos.x / canvasScaleX),
+                          y: Math.floor(mousePos.y / canvasScaleY)}
             //var message = 'Mouse position: ' + mousePos.x + ',' + mousePos.y;
             //writeMessage(canvas_write, message);
             var hold_value = document.getElementById("holdSpectrum").checked;
             if (hold_value){
-                spectra_stack.push(mousePos);
+                spectra_stack.push(imgPos);
                 xRange = plotDiv.layout.xaxis.range;
                 var min_mz = xRange[0];
                 var max_mz = xRange[1];
-                updateSpectrum(mousePos, min_mz, max_mz)
+                updateSpectrum(imgPos, min_mz, max_mz)
             } else {
                 console.log('clear spectrum');
                 clearSpectrumPlot();
-                spectra_stack = [mousePos];
-                updateSpectrum(mousePos)
+                spectra_stack = [imgPos];
+                updateSpectrum(imgPos)
             }
+        }
 
-        }, false);
+        function setupCanvas() {
+            var canvas = document.getElementById("ion_image_canvas");
+            var ctx = canvas.getContext("2d");
+            // disable interpolation for scaled images
+            ctx.imageSmoothingEnabled = false;
+            ctx.webkitImageSmoothingEnabled = false;
+            ctx.mozImageSmoothingEnabled = false;
+            canvas.addEventListener('mouseup', ionImageClickHandler, false);
+        }
+
+        $(document).ready(function() {
+            refreshDatasetSelect();
+            setupCanvas();
         });
     </script>
 {% endblock %}
