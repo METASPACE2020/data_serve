@@ -75,6 +75,7 @@
                             var ctx = canvas.getContext("2d");
                             var background = new Image();
                             ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            console.log(data);
                             background.src = 'data:image/png;base64,' + data.b64_im;
                             background.onload = function(){
                                 ctx.drawImage(background,0,0);
@@ -271,7 +272,7 @@
         var c_y = 0; // global - current pixel
         var plotDiv = document.getElementById("spec_view");
         var spectra_stack = [];
-	    Plotly.plot(plotDiv, [{x:[0], y:[0], name:'Spectrum'}]);
+        Plotly.plot(plotDiv, [{x:[0], y:[0], name:'Spectrum'}]);
         addListener(plotDiv);
         // set mouse listener for canvas
         var context = canvas.getContext('2d');

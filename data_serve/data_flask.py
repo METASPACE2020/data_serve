@@ -1,6 +1,7 @@
+from __future__ import print_function
 from flask import Flask, jsonify, request, render_template
 from datetime import date
-from utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern
+from .utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern
 import numpy as np
 
 app = Flask(__name__)
@@ -75,7 +76,7 @@ def generate_isotope_pattern(sf, a_charge):
     rp = request.args.get('resolving_power', '100000', type=float)
     a, chg = a_charge.split('_')
     sf = sf+a
-    print sf, rp, int(chg)
+    print(sf, rp, int(chg))
     spec = get_isotope_pattern(sf, resolving_power=float(rp), instrument_type='tof', at_mz=None, cutoff_perc=0.1, charge=int(chg), pts_per_mz=10000)
     p_spec = spec.get_spectrum(source='profile')
     response = {
