@@ -43,7 +43,7 @@ def fetch_spectrum_xy(ds_id=None, x=None, y=None):
     mzs, ints = get_spectrum(ds_id, spec_ix, minmz, maxmz, int(npeaks))
     mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
     response = {'ds_id': int(ds_id),
-                'spec_ix': spec_ix,
+                'spec_ix': int(spec_ix),
                 'spec' : [(_mz,_int) for _mz, _int in zip(mzs, ints)],
                 'x': x,
                 'y': y,
