@@ -1,8 +1,10 @@
+from __future__ import print_function
+
 def get_spectrum(ds_id, ix, minmz=None, maxmz=None, npeaks=None):
     from pyimzml import ImzMLParser
     import numpy as np
     import os
-    import cPickle as pickle
+    import six.moves.cPickle as pickle
     imzml_fname = get_ds_info(ds_id)['imzml']
     imzml_idx = get_imzml_index(imzml_fname)
 
@@ -28,11 +30,11 @@ def get_spectrum(ds_id, ix, minmz=None, maxmz=None, npeaks=None):
 def get_image(ds_id, mz, ppm):
     from cpyImagingMSpec import ImzbReader
     import numpy as np
-    print mz, ppm
+    print(mz, ppm)
     imzb_fname = get_ds_info(ds_id)['imzb']
-    print imzb_fname
+    print(imzb_fname)
     imzb = ImzbReader(imzb_fname)
-    print imzb.width, imzb.height
+    print(imzb.width, imzb.height)
     ion_image = imzb.get_mz_image(mz, ppm)
     return ion_image.T
 
@@ -53,28 +55,28 @@ def get_all_dataset_names_and_ids():
     import json
     import numpy as np
     ds_info = json.load(open(DS_INFO_FILENAME))
-    ds_ids = ds_info.keys()
+    ds_ids = list(ds_info.keys())
     ds_names = [ds_info[k]['name'] for k in ds_ids]
     ord = np.argsort(ds_names)
-    return [ds_names[_n] for _n in ord],  [ds_ids[_n] for _n in ord]
+    return [ds_names[_n] for _n in ord], [ds_ids[_n] for _n in ord]
 
 
 def b64encode(im_vect, im_shape, colormap_name='viridis'):
     import base64
     import matplotlib.pyplot as plt
     import numpy as np
-    import StringIO
-    in_memory_path  = StringIO.StringIO()
+    import six
+    in_memory_path = six.BytesIO()
     plt.imsave(in_memory_path, np.reshape(im_vect, im_shape), cmap=plt.get_cmap(colormap_name))
     encoded = base64.b64encode(in_memory_path.getvalue())
-    return encoded
+    return encoded.decode('ascii')
 
 def coord_to_ix(ds_id, x, y):
     import numpy as np
     imzml_fname = get_ds_info(ds_id)['imzml']
     imzml_index = get_imzml_index(imzml_fname)
-    print x, y, imzml_fname
-    print np.min(imzml_index['coordinates'], axis=0), np.max(imzml_index['coordinates'], axis=0)
+    print(x, y, imzml_fname)
+    print(np.min(imzml_index['coordinates'], axis=0), np.max(imzml_index['coordinates'], axis=0))
     ix = np.where([all([c[0]==x, c[1]==y]) for c in imzml_index['coordinates']])[0][0]
     return ix
 
@@ -94,7 +96,7 @@ def parse_imzml_index(imzml_filename):
     return imzml_idx
 
 def get_imzml_index(imzml_fname):
-    import cPickle as pickle
+    import six.moves.cPickle as pickle
     import os
     imzml_idx_fname = imzml_fname + '.idx'
     if not os.path.exists(imzml_idx_fname):
@@ -200,6 +202,4 @@ def scan_folder_for_imzml(folder):
     import os
     for root, dirs, files in  os.walk(folder):
         if 'CVS' in files:
-            print files
-
-
+            print(files)

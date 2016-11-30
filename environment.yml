@@ -1,0 +1,11 @@
+name: data-serve
+
+dependencies:
+  - numpy
+  - cffi
+  - six
+  - matplotlib
+  - pip:
+      - cpyImagingMSpec==0.2.2
+      - flask
+      - pyimzml
