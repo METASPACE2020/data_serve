@@ -7,7 +7,7 @@
         </div>
         <h3>Select dataset ID</h3>
         <p>Dataset ID:
-            <select id="ds_ids">
+            <select id="ds_ids" onchange="getIonImage()">
             </select>
             <span id="ds_title"></span>
             <!-- <input type="text" size="5" name="ds_id" value="0"> -->
@@ -79,9 +79,7 @@
                 ctx.drawImage(background, 0, 0);
             }
         }
-
-        $(function() {
-            var submit_form = function(e) {
+        function getIonImage() {
                 var ds_id = $('select[id="ds_ids"]').val();
                 console.log(ds_id);
                 var m_z   = $('input[name="m_z"]').val();
@@ -97,15 +95,22 @@
                         console.log( "image fetch failed" );
                         });
                 return false;
-            };
+        }
+        function bindGetIonImage(){
+            var submit_form = getIonImage;
             $('a#calculate').bind('click', submit_form);
             $('input[type=text]').bind('keydown', function(e) {
                 if (e.keyCode == 13) {
-                    submit_form(e);
+                    submit_form;
                 }
             });
             $('input[name=a]').focus();
-        });
+        }
+
+        function bindDatasetSelect(){
+            var submit_form = getIonImage;
+            $('ds_ids').bind('change', submit_form);
+        }
 
         function showIsotopePattern() {
             var sf = $('input[name="sum_formula"]').val();
@@ -315,7 +320,11 @@
 
         $(document).ready(function() {
             refreshDatasetSelect();
+            setTimeout(function () { getIonImage(); }, 500); // seems to take a few ms to propagate the change in dropdown menu
             setupCanvas();
+            bindGetIonImage();
+            bindDatasetSelect();
+
         });
     </script>
 {% endblock %}
