@@ -82,11 +82,11 @@ export default {
     zoomSpectralPlot(mzRange) {
       console.log(mzRange);
       this.mzRange = mzRange;
-      var spectra = [];
-      var processed = 0;
+      let spectra = [];
+      let processed = 0;
 
       for (let i = 0; i < this.selectedPixels.length; i++) {
-        var p = this.selectedPixels[i],
+        let p = this.selectedPixels[i],
             params = {
               datasetId: p.datasetId, x: p.x, y: p.y,
               minmz: this.mzRange[0],
