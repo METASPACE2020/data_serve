@@ -1,10 +1,12 @@
 from __future__ import print_function
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 from datetime import date
-from .utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern
+from .utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type
 import numpy as np
 
 app = Flask(__name__)
+CORS(app)
 
 @app.route('/_version')
 def version():
@@ -21,8 +23,8 @@ def fetch_datasets():
 @app.route('/<ds_id>/spec/<spec_ix>')
 def fetch_spectrum(ds_id=None, spec_ix=None):
     npeaks = request.args.get('npeaks', '25', type=int)
-    minmz =  request.args.get('minmz', None, type=float)
-    maxmz =  request.args.get('maxmz', None, type=float)
+    minmz = request.args.get('minmz', None, type=float)
+    maxmz = request.args.get('maxmz', None, type=float)
     mzs, ints = get_spectrum(ds_id, spec_ix, minmz, maxmz, npeaks)
     mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
     response = {'ds_id': int(ds_id),
@@ -84,8 +86,3 @@ def generate_isotope_pattern(sf, a_charge):
         'spec': [("{:3.5f}".format(_mz), "{:3.2f}".format(_int)) for _mz, _int in zip(*p_spec) if _int>0.01]
     }
     return jsonify(response)
-
-
-@app.route('/')
-def index():
-    return render_template('index.html')

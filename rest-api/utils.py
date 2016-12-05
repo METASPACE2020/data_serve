@@ -38,7 +38,7 @@ def get_image(ds_id, mz, ppm):
     ion_image = imzb.get_mz_image(mz, ppm)
     return ion_image.T
 
-DS_INFO_FILENAME = 'data_serve/ds_info.json'
+DS_INFO_FILENAME = 'ds_info.json'
 
 def get_ds_info(id):
     # todo reimplement this in database

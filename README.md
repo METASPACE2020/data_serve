@@ -5,7 +5,6 @@ A lightweight app for serving images and spectra over a RESTful API with a simpl
 This is a flask app. To run (with visibility over a local network):
 
 ```
-export FLASK_APP=./data_serve/data_flask.py
+export FLASK_APP=./data_serve/server.py
 flask run --host=0.0.0.0
 ```
-
