@@ -1,7 +1,7 @@
 from __future__ import print_function
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template,  make_response
 from datetime import date
-from .utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern
+from .utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern, get_imzml_header
 import numpy as np
 
 app = Flask(__name__)
@@ -70,6 +70,21 @@ def fetch_image(ds_id=None, mz=None):
                 }
     return jsonify(response)
 
+@app.route('/<ds_id>/imzml_header')
+def fetch_header(ds_id=None):
+    header = get_imzml_header(ds_id)
+    response = {'ds_id': int(ds_id),
+                'ds_name': get_ds_name(ds_id),
+                'imzml_header': header,
+                }
+    return jsonify(response)
+
+@app.route('/<ds_id>/imzml_header/txt')
+def serve_header_file(ds_id=None):
+    header = get_imzml_header(ds_id)
+    response = make_response(header)
+    response.headers["Content-Disposition"] = "attachment; filename={}.header.imzml".format(get_ds_name(ds_id))
+    return response
 
 @app.route('/_isotope/<sf>/<a_charge>/')
 def generate_isotope_pattern(sf, a_charge):

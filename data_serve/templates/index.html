@@ -10,7 +10,8 @@
             <select id="ds_ids" onchange="getIonImage()">
             </select>
             <span id="ds_title"></span>
-            <!-- <input type="text" size="5" name="ds_id" value="0"> -->
+            <p>
+            <button type="button" onclick="getImzmlHeader()">Download imzml header</button>
         </p>
         <div class="row">
             <div class="col-md-6">
@@ -307,7 +308,11 @@
                 updateSpectrum(imgPos)
             }
         }
+        function getImzmlHeader(){
+            var ds_id = $('select[id="ds_ids"]').val();
+            window.location.href= ds_id + "/imzml_header/txt"
 
+        }
         function setupCanvas() {
             var canvas = document.getElementById("ion_image_canvas");
             var ctx = canvas.getContext("2d");

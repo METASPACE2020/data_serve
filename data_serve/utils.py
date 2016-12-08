@@ -203,3 +203,15 @@ def scan_folder_for_imzml(folder):
     for root, dirs, files in  os.walk(folder):
         if 'CVS' in files:
             print(files)
+
+def get_imzml_header(ds_id):
+    # quick and dirty parsing to strip of all spectra objects
+    imzml_filename = get_ds_info(ds_id)['imzml']
+    header = ''
+    with open(imzml_filename) as f:
+        for line in f.readlines():
+            if line.strip().startswith('<run'):
+                header=header+'</mzML>'
+                break
+            header = header + line
+    return header
