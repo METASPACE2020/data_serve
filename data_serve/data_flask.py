@@ -1,14 +1,14 @@
 from __future__ import print_function
 from flask import Flask, jsonify, request, render_template,  make_response
 from datetime import date
-from .utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern, get_imzml_header
+from .utils import get_spectrum, get_image, get_ds_name, get_all_dataset_names_and_ids, b64encode, coord_to_ix, prettify_spectrum, peak_type, get_isotope_pattern, get_imzml_header, get_optical_image
 import numpy as np
 
 app = Flask(__name__)
 
 @app.route('/_version')
 def version():
-    response = {'version': '3.5.1',
+    response = {'version': '0.0.1',
                 'last_build': date.today().isoformat()}
     return jsonify(response)
 
@@ -25,7 +25,7 @@ def fetch_spectrum(ds_id=None, spec_ix=None):
     maxmz =  request.args.get('maxmz', None, type=float)
     mzs, ints = get_spectrum(ds_id, spec_ix, minmz, maxmz, npeaks)
     mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
-    response = {'ds_id': int(ds_id),
+    response = {'ds_id': ds_id,
                 'spec_ix': int(spec_ix.strip('/')),
                 'spec' : [(_mz,_int) for _mz, _int in zip(mzs, ints)],
                 'xstart': minmz,
@@ -42,7 +42,7 @@ def fetch_spectrum_xy(ds_id=None, x=None, y=None):
     spec_ix = coord_to_ix(ds_id, int(x), int(y))
     mzs, ints = get_spectrum(ds_id, spec_ix, minmz, maxmz, int(npeaks))
     mzs, ints = prettify_spectrum(mzs, ints, peak_type(ds_id))
-    response = {'ds_id': int(ds_id),
+    response = {'ds_id': ds_id,
                 'spec_ix': int(spec_ix),
                 'spec' : [(_mz,_int) for _mz, _int in zip(mzs, ints)],
                 'x': x,
@@ -59,7 +59,7 @@ def fetch_image(ds_id=None, mz=None):
     ppm = float(request.args.get('ppm', '5.'))
     im = get_image(ds_id, mz, ppm)
     im_vect = [ float(ii) for ii in im.flatten()]
-    response = {'ds_id': int(ds_id),
+    response = {'ds_id': ds_id,
                 'ds_name': get_ds_name(ds_id),
                 'mz': mz,
                 'ppm': ppm,
@@ -70,10 +70,45 @@ def fetch_image(ds_id=None, mz=None):
                 }
     return jsonify(response)
 
+
+@app.route('/ds/<ds_id>/optical_im/')
+def fetch_optical_image(ds_id=None, mz=None):
+    ix = int(request.args.get('ix', '0'))
+    im, transform = get_optical_image(ds_id, ix)
+    im_vect = [ float(ii) for ii in im.flatten()]
+    response = {'ds_id': ds_id,
+                'ds_name': get_ds_name(ds_id),
+                'ix': ix,
+                'transform': transform,
+                'im_shape': im.shape,
+                'min_intensity' : np.min(im_vect),
+                'max_intensity': np.max(im_vect),
+                'b64_im': b64encode(im_vect, im.shape, 'Greys')
+                }
+    return jsonify(response)
+
+
+@app.route('/<ds_id>/px_vals/<mz>')
+def fetch_vals(ds_id=None, mz=None):
+    mz = float(mz)
+    ppm = float(request.args.get('ppm', '5.'))
+    im = get_image(ds_id, mz, ppm)
+    im_vect = [ float(ii) for ii in im.flatten()]
+    response = {'ds_id': ds_id,
+                'ds_name': get_ds_name(ds_id),
+                'mz': mz,
+                'ppm': ppm,
+                'im_shape': im.shape,
+                'min_intensity' : np.min(im_vect),
+                'max_intensity': np.max(im_vect),
+                'im_vect': im_vect
+                }
+    return jsonify(response)
+
 @app.route('/<ds_id>/imzml_header')
 def fetch_header(ds_id=None):
     header = get_imzml_header(ds_id)
-    response = {'ds_id': int(ds_id),
+    response = {'ds_id': ds_id,
                 'ds_name': get_ds_name(ds_id),
                 'imzml_header': header,
                 }
@@ -104,3 +139,7 @@ def generate_isotope_pattern(sf, a_charge):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/ds/<ds_id>')
+def dataset(ds_id):
+    return render_template('dataset.html', ds_id=ds_id)

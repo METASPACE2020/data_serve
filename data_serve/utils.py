@@ -38,6 +38,15 @@ def get_image(ds_id, mz, ppm):
     ion_image = imzb.get_mz_image(mz, ppm)
     return ion_image.T
 
+
+def get_optical_image(ds_id, ix):
+    import matplotlib.pyplot as plt
+    im_fn = get_ds_info(ds_id)['optical_image'][ix]['source']
+    im = plt.imread(im_fn)
+    transform = get_ds_info(ds_id)['optical_image'][ix]['transform']
+    return im, transform
+
+
 DS_INFO_FILENAME = 'data_serve/ds_info.json'
 
 def get_ds_info(id):
