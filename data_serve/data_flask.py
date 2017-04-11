@@ -18,7 +18,7 @@ def fetch_datasets():
     response = {'ds_names': ds_names, 'ds_ids': ds_ids}
     return jsonify(response)
 
-@app.route('/<ds_id>/spec/<spec_ix>')
+@app.route('/dataset/<ds_id>/spec/<spec_ix>')
 def fetch_spectrum(ds_id=None, spec_ix=None):
     npeaks = request.args.get('npeaks', '25', type=int)
     minmz =  request.args.get('minmz', None, type=float)
@@ -34,7 +34,7 @@ def fetch_spectrum(ds_id=None, spec_ix=None):
     return jsonify(response)
 
 
-@app.route('/<ds_id>/spec_xy/<x>/<y>/')
+@app.route('/dataset/<ds_id>/spec_xy/<x>/<y>/')
 def fetch_spectrum_xy(ds_id=None, x=None, y=None):
     npeaks = request.args.get('npeaks', '25', type=int)
     minmz =  request.args.get('minmz', None, type=float)
@@ -53,7 +53,7 @@ def fetch_spectrum_xy(ds_id=None, x=None, y=None):
     return jsonify(response)
 
 
-@app.route('/<ds_id>/im/<mz>')
+@app.route('/dataset/<ds_id>/im/<mz>')
 def fetch_image(ds_id=None, mz=None):
     mz = float(mz)
     ppm = float(request.args.get('ppm', '5.'))
@@ -71,7 +71,7 @@ def fetch_image(ds_id=None, mz=None):
     return jsonify(response)
 
 
-@app.route('/ds/<ds_id>/optical_im/')
+@app.route('/dataset/<ds_id>/optical_im/')
 def fetch_optical_image(ds_id=None, mz=None):
     ix = int(request.args.get('ix', '0'))
     im, transform = get_optical_image(ds_id, ix)
@@ -88,7 +88,7 @@ def fetch_optical_image(ds_id=None, mz=None):
     return jsonify(response)
 
 
-@app.route('/<ds_id>/px_vals/<mz>')
+@app.route('/dataset/<ds_id>/px_vals/<mz>')
 def fetch_vals(ds_id=None, mz=None):
     mz = float(mz)
     ppm = float(request.args.get('ppm', '5.'))
@@ -105,7 +105,7 @@ def fetch_vals(ds_id=None, mz=None):
                 }
     return jsonify(response)
 
-@app.route('/<ds_id>/imzml_header')
+@app.route('/dataset/<ds_id>/imzml_header')
 def fetch_header(ds_id=None):
     header = get_imzml_header(ds_id)
     response = {'ds_id': ds_id,
@@ -114,7 +114,7 @@ def fetch_header(ds_id=None):
                 }
     return jsonify(response)
 
-@app.route('/<ds_id>/imzml_header/txt')
+@app.route('/dataset/<ds_id>/imzml_header/txt')
 def serve_header_file(ds_id=None):
     header = get_imzml_header(ds_id)
     response = make_response(header)
@@ -140,6 +140,6 @@ def generate_isotope_pattern(sf, a_charge):
 def index():
     return render_template('index.html')
 
-@app.route('/ds/<ds_id>')
+@app.route('/dataset/<ds_id>')
 def dataset(ds_id):
     return render_template('dataset.html', ds_id=ds_id)

@@ -94,7 +94,7 @@
                 var ds_id = $('select[id="ds_ids"]').val();
                 console.log(ds_id);
                 var m_z   = $('input[name="m_z"]').val();
-                $.getJSON($SCRIPT_ROOT + ds_id + '/im/' + m_z,
+                $.getJSON($SCRIPT_ROOT + '/dataset/' + ds_id + '/im/' + m_z,
                         {
                             ppm: $('input[name="ppm"]').val()
                         })
@@ -221,7 +221,7 @@
             var ds_id = $('select[id="ds_ids"]').val();
             for(var ii=0;ii<spectra_stack.length; ii++){
                 console.log(spectra_stack[ii]);
-                $.getJSON($SCRIPT_ROOT + ds_id + '/spec_xy/' + spectra_stack[ii].x +"/" + spectra_stack[ii].y + "/",
+                $.getJSON($SCRIPT_ROOT + '/dataset/' + ds_id + '/spec_xy/' + spectra_stack[ii].x +"/" + spectra_stack[ii].y + "/",
                     {npeaks: npeaks,
                      minmz: minmz,
                      maxmz: maxmz
