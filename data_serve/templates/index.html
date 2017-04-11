@@ -1,32 +1,42 @@
 {% extends "layout.html" %}
 {% block body %}
     <div class="container">
-        <div class="page-header">
-            <h1>Explore a dataset</h1>
-            <p class="lead">View ion images and spectra from a dataset.</p>
+        <div class="header"><h1>Explore a dataset</h1></div>
+        <div class="row">
+
+            <div class="col-md-6">
+                <p>
+                <p class="lead">View ion images and spectra from a dataset.</p>
+            </div>
+            <div class="col-md-6">
+                <h3>Select dataset ID</h3>
+                <p>Dataset ID:
+                    <select id="ds_ids" onchange="getIonImage()">
+                    </select>
+                    <span id="ds_title"></span>
+                    <p>
+                    <button type="button" onclick="getImzmlHeader()">Download imzml header</button>
+                </p>
+            </div>
         </div>
-        <h3>Select dataset ID</h3>
-        <p>Dataset ID:
-            <select id="ds_ids" onchange="getIonImage()">
-            </select>
-            <span id="ds_title"></span>
-            <p>
-            <button type="button" onclick="getImzmlHeader()">Download imzml header</button>
-        </p>
         <div class="row">
             <div class="col-md-6">
                 <h3>Spatial View</h3>
-                <p>Input an m/z to see the ion image, click on a pixel to view a spectrum</p>
-                <p>
+                <canvas id="ion_image_canvas" width="500px" height="500px"><!-- Ion image will be drawn inside this canvas --></canvas>
+            </div>
+            <div class="col-md-6" style="height: 200px; vertical-align: bottom">
+                <div style="padding-top: 250px">
+                    <p>Input an m/z to see the ion image, click on a pixel to view a spectrum</p>
                     m/z <input type="text" size="10" name="m_z" value="1"> +/-
                     <input type="text" size="5" name="ppm" value="1">ppm =>
                     <a href=# id="calculate">get image</a>
-                </p>
-                     <canvas id="ion_image_canvas" width="500px" height="800px"><!-- Ion image will be drawn inside this canvas --></canvas>
+                </div>
             </div>
-            <div class="col-md-6">
+            </div>
+        <div class="row">
+            <div class="col">
                 <h3>Spectrum View</h3>
-                <div id="spec_view" style="width: 500px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
+                <div id="spec_view" style="width: 95%; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
                 <p>
                     <input id = "sum_formula" type="text" size="10" name="sum_formula">
                     <select id="mySelect" name="adduct_select">
@@ -97,12 +107,18 @@
                         });
                 return false;
         }
+
         function bindGetIonImage(){
             var submit_form = getIonImage;
             $('a#calculate').bind('click', submit_form);
-            $('input[type=text]').bind('keydown', function(e) {
+            $('input[name=m_z]').bind('keydown', function(e) {
                 if (e.keyCode == 13) {
-                    submit_form;
+                     $('a#calculate').click();
+                }
+            });
+            $('input[name=ppm]').bind('keydown', function(e) {
+                if (e.keyCode == 13) {
+                     $('a#calculate').click();
                 }
             });
             $('input[name=a]').focus();
@@ -257,8 +273,6 @@
                 //title: 'Spectrum from (' + _x + ' ' + _y + ')',
                 yaxis: {range: [0, y_max]},
                 autosize: false,
-                  width: 500,
-                  height: 400,
                   margin: {
                     l: 50,
                     r: 10,
