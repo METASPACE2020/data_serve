@@ -1,0 +1,400 @@
+{% extends "layout.html" %}
+{% block body %}
+    <div class="container">
+        <div class="page-header">
+            <h1>Explore a dataset</h1>
+            <p class="lead">View ion images and spectra from dataset {{ ds_id }}.</p>
+        </div>
+        <div class="row">
+            <div class="col-md-6">
+                <h3>Spatial View</h3>
+                <p>Input an m/z to see the ion image, click on a pixel to view a spectrum</p>
+                <p>
+                    m/z <input type="text" size="10" name="m_z" value="1"> +/-
+                    <input type="text" size="5" name="ppm" value="1">ppm =>
+                    <a href=# id="calculate">get image</a>
+                </p>
+                     <canvas id="ion_image_canvas" width="500px" height="800px"><!-- Ion image will be drawn inside this canvas --></canvas>
+                <input type="range" id="alphaSlider" value="90">
+
+            </div>
+            <div class="col-md-6">
+                <h3>Spectrum View</h3>
+                <div id="spec_view" style="width: 500px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
+                <p>
+                    <input id = "sum_formula" type="text" size="10" name="sum_formula">
+                    <select id="mySelect" name="adduct_select">
+                        <option value="+_1">M+</option>
+                        <option value="+H_1">M+H</option>
+                        <option value="+Na_1">M+Na</option>
+                        <option value="+K_1">M+K</option>
+                        <option value="-_-1">M-</option>
+                        <option value="-H_-1">M-H</option>
+                    </select>
+                    <button type="button" onclick="showIsotopePattern()">Overlay isotope pattern</button>
+                    <button type="button" onclick="clearIsotopePattern()">Clear isotope patterns</button>
+
+                    <p>Intensity: <input id = "isotope_intensity" type="text" size="5" value="1000000"></p>
+                <p>Resolving power: <input id = "resolving_power" type="text" size="5" value="100000"></p>
+                <p><input type="checkbox" id="holdSpectrum">: Hold Spectra</p>
+                </p>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+
+        function showOpticalImage(img) {
+            var canvas = document.getElementById("ion_image_canvas");
+            var ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            console.log(canvasScaleX, canvasScaleY)
+
+            ctx.scale(canvasScaleX, canvasScaleY);
+            ctx.drawImage(img, 0, 0);
+            ctx.restore()
+        }
+
+        function showIonImage(data) {
+            var alpha = document.getElementById("alphaSlider").value;
+            var canvas = document.getElementById("ion_image_canvas");
+            var ctx = canvas.getContext("2d");
+            var ionimage = new Image();
+            //ctx.clearRect(0, 0, canvas.width, canvas.height);
+            showOpticalImage(backgroundImage);
+            console.log('alpha', alpha);
+            ionimage.src = 'data:image/png;base64,' + data.b64_im;
+            ionimage.onload = function(){
+                ctx.save();
+                ctx.setTransform(tform[0], tform[1], tform[2], tform[3], tform[4], tform[5]);
+                ctx.globalAlpha = alpha/100.;
+                ctx.drawImage(ionimage, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        function getIonImage() {
+                var ds_id = {{ ds_id }};
+                console.log('getting image for dataset:', ds_id);
+                var m_z   = $('input[name="m_z"]').val();
+                $.getJSON('/dataset/' + ds_id + '/im/' + m_z,
+                        {
+                            ppm: $('input[name="ppm"]').val()
+                        })
+                        .done(function(data) {
+                            $('input[name=a]').focus().select();
+                            showIonImage(data);
+                            return data
+                        })
+                        .fail(function() {
+                        console.log( "image fetch failed" );
+                        });
+                return false;
+        }
+
+        function getOpticalImage() {
+                var ds_id = {{ ds_id }};
+                console.log('get optical image:', ds_id);
+                var src  = '/dataset/' + 'ds/' + ds_id + '/optical_im/';
+                $.getJSON(src, {})
+                        .done(function(data) {
+                            $('input[name=a]').focus().select();
+                            //showOpticalImage(data);
+                            console.log('got optical image');
+                            var img = new Image();
+                            img.src = 'data:image/png;base64,' + data.b64_im;
+                            img.onload = function() {
+                                var canvas = document.getElementById("ion_image_canvas");
+                                var scale1 = canvas.width / img.width;
+                                var scale2 = canvas.height / img.height;
+                                var commonScale = Math.min(scale1, scale2);
+                                canvasScaleX = canvasScaleY = commonScale;
+                                tform = data.transform.map(function (x) {
+                                    return x * commonScale
+                                });
+                                itform = math.inv([
+                                    [tform[0], tform[2], tform[4]],
+                                    [tform[1], tform[3], tform[5]],
+                                    [0, 0, 1]]);
+                                backgroundImage = img;
+                                showOpticalImage(img);
+                            };
+
+                        })
+                        .fail(function() {
+                        console.log( "optical image fetch failed" );
+                        });
+                return false;
+        }
+
+        function bindGetIonImage(){
+            var submit_form = getIonImage;
+            $('a#calculate').bind('click', submit_form);
+            $('input[name=m_z]').bind('keydown', function(e) {
+                if (e.keyCode == 13) {
+                     $('a#calculate').click();
+                }
+            });
+            $('input[name=ppm]').bind('keydown', function(e) {
+                if (e.keyCode == 13) {
+                     $('a#calculate').click();
+                }
+            });
+            $('input[name=a]').focus();
+        }
+
+        function bindDatasetSelect(){
+            var submit_form = getIonImage;
+            $('ds_ids').bind('change', submit_form);
+        }
+
+        function showIsotopePattern() {
+            var sf = $('input[name="sum_formula"]').val();
+            var adduct = $('select[name="adduct_select"]').val();
+            console.log([sf, adduct]);
+            $.getJSON($SCRIPT_ROOT + '/_isotope/' + sf +"/" + adduct + "/", {resolving_power: $('input[id="resolving_power"]').val()})
+                    .done(function(data){
+                        addIsotopePlot(data, name="Isotope: " + sf + adduct)
+                    })
+                    .fail(function() {
+                        console.log( "isotope fetch failed" );
+                    });
+
+            }
+
+        function addIsotopePlot(data){
+            var test = (typeof minmz !== 'undefined') ?  name : '';
+            console.log(data.sf);
+            // format data
+            var spec = parseSpectrumData(data);
+            // add named trace to plot
+            var plotDiv = document.getElementById("spec_view");
+            var intensity = Number($('input[id="isotope_intensity"]').val())/100.; //divide 100 as isopattern returns %
+            for (var i=0; i<plotDiv.data.length; i++){
+                if (plotDiv.data[i].name == "Isotope:" + data.sf)
+                    {
+                        Plotly.deleteTraces(plotDiv, i);
+                    }
+            }
+            var traces = [{
+                    x: spec[0],
+                    y: spec[1].map(function(x) { return x * intensity; }),
+                    'name': "Isotope:" + data.sf
+                }];
+            Plotly.plot(plotDiv, traces);
+            Plotly.moveTraces(plotDiv, -1, 0);
+        }
+
+        function clearIsotopePattern(){
+            var plotData = plotDiv.data;
+            var to_delete = [];
+            for (var i=0; i<plotData.length; i++){
+                if (plotData[i].name.startsWith("Isotope:"))
+                    {
+                        to_delete.push(i)
+                    }
+            }
+            Plotly.deleteTraces(plotDiv, to_delete);
+        }
+
+        function clearSpectrumPlot() {
+            var plotData = plotDiv.data;
+            var to_delete = [];
+            for (var i=0; i<plotData.length; i++){
+                console.log(plotData[i].name, plotData[i].name.startsWith("Spectrum"));
+                if (plotData[i].name.startsWith("Spectrum"))
+                    {
+                        console.log('clear trace');
+                        to_delete.push(i)
+                    }
+            }
+            Plotly.deleteTraces(plotDiv, to_delete);
+        }
+
+        function spectrumZoomHandler(eventdata) {
+            console.log( 'ZOOM!' + '\n\n' +
+                         'Event data:' + '\n' +
+                         JSON.stringify(eventdata) + '\n\n' +
+                         'x-axis start:' + eventdata['xaxis.range[0]'] + '\n' +
+                         'x-axis end:' + eventdata['xaxis.range[1]'] );
+            console.log('update spectrum');
+            updateSpectrum({x: c_x, y: c_y},
+                           eventdata['xaxis.range[0]'],
+                           eventdata['xaxis.range[1]']);
+        }
+
+        function parseSpectrumData(json_data){
+            var x = [], y = [];
+            for (var i = 0; i < json_data.spec.length; i++) {
+                row = json_data.spec[i];
+                x.push(row[0]);
+                y.push(row[1]);
+            }
+            return [x, y]
+        }
+
+        function updateSpectrum(x_y, minmz, maxmz, npeaks){
+            var minmz = (typeof minmz !== 'undefined') ?  minmz : null;
+            var maxmz = (typeof maxmz !== 'undefined') ?  maxmz : null;
+            var npeaks = (typeof npeaks !== 'undefined') ?  npeaks : 500;
+            for(var ii=0;ii<spectra_stack.length; ii++){
+                console.log(spectra_stack[ii]);
+                $.getJSON('/dataset/' + {{ ds_id }} + '/spec_xy/' + spectra_stack[ii].x +"/" + spectra_stack[ii].y + "/",
+                    {npeaks: npeaks,
+                     minmz: minmz,
+                     maxmz: maxmz
+                    })
+                    .done(function(data) {
+                        console.log( "ajax: got spec data" );
+                        updateSpectrumPlot(data)
+                    })
+                    .fail(function() {
+                        console.log( "error" );
+                    });
+            }
+        }
+
+        function writeMessage(canvas, message) {
+            var context = canvas.getContext('2d');
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.font = '18pt Calibri';
+            context.fillStyle = 'black';
+            context.fillText(message, 10, 25);
+        }
+
+        function getMousePos(evt) {
+            var canvas = evt.target,
+                rect = canvas.getBoundingClientRect(),
+                scaleX = canvas.width / rect.width,
+                scaleY = canvas.height / rect.height;
+            return {
+                x: (evt.clientX - rect.left) * scaleX,
+                y: (evt.clientY - rect.top) * scaleY
+            };
+        }
+
+        function updateSpectrumPlot(json_data){
+            var spec = parseSpectrumData(json_data);
+            var x = spec[0], y = spec[1];
+            var _x = json_data.x; // global - current pixel
+            var _y = json_data.y; // global - current pixel
+            var traces = [{
+                x: x,
+                y: y,
+                name: 'Spectrum from (' + _x + ' ' + _y + ')',
+                line: {
+                    //color: 'black'
+                }
+            }];
+            var y_max = Math.max(y);
+            var layouts = {
+                //title: 'Spectrum from (' + _x + ' ' + _y + ')',
+                yaxis: {range: [0, y_max]},
+                autosize: false,
+                  width: 500,
+                  height: 400,
+                  margin: {
+                    l: 50,
+                    r: 10,
+                    b: 50,
+                    t: 10,
+                    pad: 4
+                  },
+                showlegend: true,
+                legend: {
+                    x: 0.6,
+                    y: 1
+                }
+            };
+            // mark old traces for deletion
+            var plotData = plotDiv.data;
+            var to_delete = [];
+            for (var i=0; i<plotData.length; i++){
+                if (plotData[i].name == ('Spectrum from (' + _x + ' ' + _y + ')'))
+                {
+                    to_delete.push(i)
+                }
+            }
+            Plotly.deleteTraces(plotDiv, to_delete);
+
+            Plotly.plot(plotDiv, traces, layouts);
+            console.log('deleting old trace');
+        }
+
+        // Put an empty plot into the plotly div
+        var c_x = 0, // global  - current pixel
+            c_y = 0, // global - current pixel
+            plotDiv = document.getElementById("spec_view"),
+            spectra_stack = [],
+            canvasScaleX = 1,
+            canvasScaleY = 1;
+        Plotly.plot(plotDiv, [{x:[0], y:[0], name:'Spectrum'}]);
+        plotDiv.on('plotly_relayout', spectrumZoomHandler);
+        var text = document.getElementById('spec_string');
+
+        function ionImageClickHandler(evt) {
+            var mousePos = getMousePos(evt);
+            console.log('mousePos', mousePos);
+            //var imgPos = {x: Math.floor(mousePos.x / canvasScaleX),
+            //              y: Math.floor(mousePos.y / canvasScaleY)};
+            console.log([mousePos.x, mousePos.y, 0]);
+            console.log(itform);
+            var xyz = math.multiply([mousePos.x, mousePos.y, 0], itform);
+            console.log(xyz);
+            var imgPos = {
+                x: math.floor(xyz[0]),
+                y: math.floor(xyz[1])
+                };
+
+            var hold_value = document.getElementById("holdSpectrum").checked;
+            if (hold_value){
+                spectra_stack.push(imgPos);
+                xRange = plotDiv.layout.xaxis.range;
+                var min_mz = xRange[0];
+                var max_mz = xRange[1];
+                updateSpectrum(imgPos, min_mz, max_mz)
+            } else {
+                console.log('clear spectrum');
+                clearSpectrumPlot();
+                spectra_stack = [imgPos];
+                updateSpectrum(imgPos)
+            }
+        }
+        function getImzmlHeader(){
+            var ds_id = $('select[id="ds_ids"]').val();
+            window.location.href= ds_id + "/imzml_header/txt"
+
+        }
+
+        function updateCanvas(){
+            showOpticalImage(getOpticalImage());
+            showIonImage(getIonImage());
+        }
+
+        function setupCanvas() {
+            var canvas = document.getElementById("ion_image_canvas");
+            var ctx = canvas.getContext("2d");
+            // disable interpolation for scaled images
+            ctx.imageSmoothingEnabled = false;
+            ctx.webkitImageSmoothingEnabled = false;
+            ctx.mozImageSmoothingEnabled = false;
+            canvas.addEventListener('mouseup', ionImageClickHandler, false);
+        }
+
+        function bindSlider(){
+            var slider = document.getElementById("alphaSlider");
+            slider.addEventListener('mouseup', getIonImage, false)
+        }
+
+        $(document).ready(function() {
+            tform = [1, 0, 0, 1, 0, 0];
+            // backgroundImage = null;
+            canvasScaleX = canvasScaleY = 1;
+            setupCanvas();
+            bindGetIonImage();
+            bindDatasetSelect();
+            bindSlider();
+            getOpticalImage()
+        });
+    </script>
+{% endblock %}
