@@ -60,7 +60,7 @@
     <script type="text/javascript">
 
         function refreshDatasetSelect(){
-            $.getJSON($SCRIPT_ROOT + '/_ds/', {})
+            $.getJSON($SCRIPT_ROOT + '/datasets/', {})
                     .done(function(data){
                         var options = '';
                         for (var x = 0; x < data.ds_ids.length; x++) {

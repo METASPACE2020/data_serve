@@ -12,7 +12,7 @@ def version():
                 'last_build': date.today().isoformat()}
     return jsonify(response)
 
-@app.route('/_ds/')
+@app.route('/datasets/')
 def fetch_datasets():
     ds_names, ds_ids = get_all_dataset_names_and_ids()
     response = {'ds_names': ds_names, 'ds_ids': ds_ids}
