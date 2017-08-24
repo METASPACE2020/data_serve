@@ -2,21 +2,19 @@
 {% block body %}
     <div class="container">
         <div class="header"><h1>Explore a dataset</h1></div>
+        <p class="lead">View ion images and spectra from a dataset.</p>
         <div class="row">
-
             <div class="col-md-6">
-                <p>
-                <p class="lead">View ion images and spectra from a dataset.</p>
-            </div>
-            <div class="col-md-6">
-                <h3>Select dataset ID</h3>
-                <p>Dataset ID:
+                <h3>Datasets</h3>
+                <div id="datasetTableContainer" class="container">
+                </div>
+                <!--<p>Dataset ID:
                     <select id="ds_ids" onchange="getIonImage()">
                     </select>
                     <span id="ds_title"></span>
                     <p>
                     <button type="button" onclick="getImzmlHeader()">Download imzml header</button>
-                </p>
+                </p>-->
             </div>
         </div>
         <div class="row">
@@ -71,6 +69,27 @@
                     .fail(function(data){console.log('ds fetch failed')})
         }
 
+        function refreshDatasetTable(){
+            $.getJSON($SCRIPT_ROOT + '/datasets/', {})
+                    .done(function(data){
+                        var table = '<table id="datasetTable" class="table table-striped"><thead><th>Dataset ID</th><th>Dataset Name</th></thead><tbody>';
+                        for (var x = 0; x < data.ds_ids.length; x++) {
+                            table += '<tr><td>' + data.ds_ids[x] + '</td><td>' + data.ds_names[x] + '</td>></tr>';
+                        }
+                        table += '</tbody></table>';
+                        $('#datasetTableContainer').html(table);
+                        var table = $('#datasetTable').DataTable();
+                        $('#datasetTable tbody').on('click', 'tr', function () {
+                        var data = table.row( this ).data();
+                        console.log( 'Loading dataset '+ data[1]);
+                        ds_id = data[0];
+                        getIonImage();
+    } );
+
+                    })
+                    .fail(function(data){console.log('ds fetch failed')})
+        }
+
 
         function showIonImage(data) {
             var canvas = document.getElementById("ion_image_canvas");
@@ -91,7 +110,6 @@
             }
         }
         function getIonImage() {
-                var ds_id = $('select[id="ds_ids"]').val();
                 console.log(ds_id);
                 var m_z   = $('input[name="m_z"]').val();
                 $.getJSON($SCRIPT_ROOT + '/dataset/' + ds_id + '/im/' + m_z,
@@ -218,7 +236,6 @@
             var minmz = (typeof minmz !== 'undefined') ?  minmz : null;
             var maxmz = (typeof maxmz !== 'undefined') ?  maxmz : null;
             var npeaks = (typeof npeaks !== 'undefined') ?  npeaks : 500;
-            var ds_id = $('select[id="ds_ids"]').val();
             for(var ii=0;ii<spectra_stack.length; ii++){
                 console.log(spectra_stack[ii]);
                 $.getJSON($SCRIPT_ROOT + '/dataset/' + ds_id + '/spec_xy/' + spectra_stack[ii].x +"/" + spectra_stack[ii].y + "/",
@@ -333,8 +350,7 @@
             }
         }
         function getImzmlHeader(){
-            var ds_id = $('select[id="ds_ids"]').val();
-            window.location.href= ds_id + "/imzml_header/txt"
+            window.location.href= "/dataset/" + ds_id + "/imzml_header/txt"
 
         }
         function setupCanvas() {
@@ -348,7 +364,9 @@
         }
 
         $(document).ready(function() {
-            refreshDatasetSelect();
+            ds_id = "";
+            refreshDatasetTable();
+            //refreshDatasetSelect();
             setTimeout(function () { getIonImage(); }, 500); // seems to take a few ms to propagate the change in dropdown menu
             setupCanvas();
             bindGetIonImage();
