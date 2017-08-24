@@ -3,7 +3,7 @@
     <div class="container">
         <div class="page-header">
             <h1>Explore a dataset</h1>
-            <p class="lead">View ion images and spectra from dataset {{ ds_id }}.</p>
+            <p class="lead">View ion images and spectra from dataset {{ ds_name }}.</p>
         </div>
         <div class="row">
             <div class="col-md-6">
@@ -16,6 +16,9 @@
                 </p>
                      <canvas id="ion_image_canvas" width="500px" height="800px"><!-- Ion image will be drawn inside this canvas --></canvas>
                 <input type="range" id="alphaSlider" value="90">
+                <select id="opticalImageSelect" name="optical_image_select"></select>
+                <p><input type="checkbox" id="mapAlpha" onclick="getIonImage()">: Proportional Transparancy</p>
+
 
             </div>
             <div class="col-md-6">
@@ -74,12 +77,15 @@
         }
 
         function getIonImage() {
-                var ds_id = {{ ds_id }};
+                var ds_id = "{{ ds_id }}";
                 console.log('getting image for dataset:', ds_id);
                 var m_z   = $('input[name="m_z"]').val();
+                console.log(document.getElementById('mapAlpha').checked);
                 $.getJSON('/dataset/' + ds_id + '/im/' + m_z,
                         {
-                            ppm: $('input[name="ppm"]').val()
+                            ppm: $('input[name="ppm"]').val(),
+                            colormap: 'viridis',
+                            mapalpha: document.getElementById('mapAlpha').checked
                         })
                         .done(function(data) {
                             $('input[name=a]').focus().select();
@@ -93,10 +99,12 @@
         }
 
         function getOpticalImage() {
-                var ds_id = {{ ds_id }};
+                var ds_id = "{{ ds_id }}";
                 console.log('get optical image:', ds_id);
-                var src  = '/dataset/' + 'ds/' + ds_id + '/optical_im/';
-                $.getJSON(src, {})
+                var src  = '/dataset/' + ds_id + '/optical_im/';
+                var ix = $('select[id="opticalImageSelect"]').val() || 0;
+                console.log('optical im ix', ix)
+                $.getJSON(src, {ix: ix})
                         .done(function(data) {
                             $('input[name=a]').focus().select();
                             //showOpticalImage(data);
@@ -109,17 +117,23 @@
                                 var scale2 = canvas.height / img.height;
                                 var commonScale = Math.min(scale1, scale2);
                                 canvasScaleX = canvasScaleY = commonScale;
-                                tform = data.transform.map(function (x) {
-                                    return x * commonScale
-                                });
-                                itform = math.inv([
-                                    [tform[0], tform[2], tform[4]],
-                                    [tform[1], tform[3], tform[5]],
-                                    [0, 0, 1]]);
+                                console.log('data.transform', data.transform);
+                                var transform = data.transform;//math.multiply(data.transform, [[commonScale, 0, 0], [0, commonScale, 0], [0,0,commonScale]]);
+                                console.log('transform', transform);
+                                tform = [
+                                        transform[0][0]*commonScale,
+                                        transform[1][0]*commonScale,
+                                        transform[0][1]*commonScale,
+                                        transform[1][1]*commonScale,
+                                        transform[0][2]*commonScale,
+                                        transform[1][2]*commonScale,
+                                    ];
+                                console.log('tform', tform);
+                                itform = math.inv(transform);
+                                console.log('itform', itform)
                                 backgroundImage = img;
                                 showOpticalImage(img);
                             };
-
                         })
                         .fail(function() {
                         console.log( "optical image fetch failed" );
@@ -239,7 +253,7 @@
             var npeaks = (typeof npeaks !== 'undefined') ?  npeaks : 500;
             for(var ii=0;ii<spectra_stack.length; ii++){
                 console.log(spectra_stack[ii]);
-                $.getJSON('/dataset/' + {{ ds_id }} + '/spec_xy/' + spectra_stack[ii].x +"/" + spectra_stack[ii].y + "/",
+                $.getJSON('/dataset/' + "{{ ds_id }}" + '/spec_xy/' + spectra_stack[ii].x +"/" + spectra_stack[ii].y + "/",
                     {npeaks: npeaks,
                      minmz: minmz,
                      maxmz: maxmz
@@ -335,15 +349,15 @@
         function ionImageClickHandler(evt) {
             var mousePos = getMousePos(evt);
             console.log('mousePos', mousePos);
-            //var imgPos = {x: Math.floor(mousePos.x / canvasScaleX),
-            //              y: Math.floor(mousePos.y / canvasScaleY)};
-            console.log([mousePos.x, mousePos.y, 0]);
-            console.log(itform);
-            var xyz = math.multiply([mousePos.x, mousePos.y, 0], itform);
-            console.log(xyz);
+            var imgPos = {x: Math.floor(mousePos.x / canvasScaleX),
+                          y: Math.floor(mousePos.y / canvasScaleY)};
+            console.log('imgPos', imgPos);
+            console.log('itform', itform, [itform[0].slice(0,2), itform[1].slice(0,2)]);
+            var xy = math.multiply([imgPos.x, imgPos.y], [itform[0].slice(0,2), itform[1].slice(0,2)]);// - [itform[0][2], itform[1][2]]
+            console.log('xy', xy);
             var imgPos = {
-                x: math.floor(xyz[0]),
-                y: math.floor(xyz[1])
+                x: math.floor(xy[0]+itform[0][2]),
+                y: math.floor(xy[1]+itform[1][2])
                 };
 
             var hold_value = document.getElementById("holdSpectrum").checked;
@@ -385,11 +399,30 @@
             var slider = document.getElementById("alphaSlider");
             slider.addEventListener('mouseup', getIonImage, false)
         }
-
+        function populateOpticalImages() {
+            var ds_id = "{{ ds_id }}";
+            $.getJSON('/dataset/' + ds_id + '/metadata',
+                        {
+                        })
+                        .done(function(data) {
+                            console.log('optical image list fetch', data)
+                            var options = '';
+                            for (var x = 0; x < data.optical_image.length; x++) {
+                                options += '<option value="' + x + '">' + data.optical_image[x].name + '</option>';
+                            }
+                            $('#opticalImageSelect').html(options);
+                            $('#opticalImageSelect').bind('change', getOpticalImage);
+                            return true
+                        })
+                        .fail(function() {
+                        console.log( "optical image list fetch failed" );
+                        });
+        }
         $(document).ready(function() {
             tform = [1, 0, 0, 1, 0, 0];
             // backgroundImage = null;
             canvasScaleX = canvasScaleY = 1;
+            populateOpticalImages();
             setupCanvas();
             bindGetIonImage();
             bindDatasetSelect();
