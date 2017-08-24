@@ -1,0 +1,9 @@
+channels:
+  - lomereiter
+  - anaconda
+dependencies:
+  - libgcc
+  - ims-cpp
+  - pip:
+      - boto3
+      - git+https://github.com/METASPACE2020/sm-analytics-python.git@sm0.6

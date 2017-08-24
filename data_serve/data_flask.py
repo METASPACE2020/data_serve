@@ -1,7 +1,7 @@
 from __future__ import print_function
 from flask import Flask, jsonify, request, render_template,  make_response
 from datetime import date
-from .utils import *
+from utils import *
 import numpy as np
 
 app = Flask(__name__)
