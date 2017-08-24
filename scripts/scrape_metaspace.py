@@ -51,7 +51,7 @@ def convert_dataset(imzml, imzb, ds_id, ds_meta, ims_path):
 
 
 if __name__ == '__main__':
-    # scrape_metaspace ["dsid1", "dsid2] "parent/folder/" --ims_path "/path/to/ims"
+    # scripts/scrape_metaspace.py --ds-ids 2017-08-22_23h34m34s --destination /tmp
     parser = argparse.ArgumentParser(description='Scrape data from metaspace')
     parser.add_argument('--ds-ids', nargs='+', required=True)
     parser.add_argument('--destination', required=True)
