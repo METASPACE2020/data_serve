@@ -1,10 +1,17 @@
 from __future__ import print_function
+from cpyMSpec import isotopePattern, InstrumentModel, ProfileSpectrum
+from pyMSpec.mass_spectrum import MassSpectrum
+import numpy as np
+import six.moves.cPickle as pickle
+import os
+from pyMSpec import instrument
+from pyimzml import ImzMLParser
+from cpyImagingMSpec import ImzbReader
+import json
+from pyMSpec.centroid_detection import gradient
+import matplotlib.pyplot as plt
 
 def get_spectrum(ds_id, ix, minmz=None, maxmz=None, npeaks=None):
-    from pyimzml import ImzMLParser
-    import numpy as np
-    import os
-    import six.moves.cPickle as pickle
     imzml_fname = get_ds_info(ds_id)['imzml']
     imzml_idx = get_imzml_index(imzml_fname)
 
@@ -28,8 +35,6 @@ def get_spectrum(ds_id, ix, minmz=None, maxmz=None, npeaks=None):
     return mzs, ints
 
 def get_image(ds_id, mz, ppm):
-    from cpyImagingMSpec import ImzbReader
-    import numpy as np
     print(mz, ppm)
     imzb_fname = get_ds_info(ds_id)['imzb']
     print(imzb_fname)
@@ -40,9 +45,12 @@ def get_image(ds_id, mz, ppm):
 
 
 def get_optical_image(ds_id, ix):
-    import matplotlib.pyplot as plt
     im_fn = get_ds_info(ds_id)['optical_image'][ix]['source']
+    if not os.path.exists(im_fn):
+        raise IOError("file not found: {}".format(im_fn))
     im = plt.imread(im_fn)
+    if len(im.shape) == 2:
+        im = np.dstack([im,im,im])
     transform = get_ds_info(ds_id)['optical_image'][ix]['transform']
     return im, transform
 
@@ -61,22 +69,34 @@ def get_ds_name(ds_id):
 
 
 def get_all_dataset_names_and_ids():
-    import json
-    import numpy as np
     ds_info = json.load(open(DS_INFO_FILENAME))
     ds_ids = list(ds_info.keys())
     ds_names = [ds_info[k]['name'] for k in ds_ids]
     ord = np.argsort(ds_names)
     return [ds_names[_n] for _n in ord], [ds_ids[_n] for _n in ord]
 
+def color_image(im_vect, im_shape, colormap='viridis', mapalpha=False, hotspot=False):
+    cmap = plt.get_cmap(colormap)
+    im_vect = np.asarray(im_vect)
+    if im_vect.max()>0 & hotspot:
+        q = np.percentile(im_vect[im_vect>0], 99)
+        print("q",q)
+        im_vect[im_vect>q]=q
+    im_vect -= im_vect.min()
+    im_vect = im_vect / im_vect.max()
 
-def b64encode(im_vect, im_shape, colormap_name='viridis'):
+    im_arr = cmap(np.reshape(im_vect, im_shape))
+    if mapalpha:
+        print('mapalpha')
+        im_arr[:, :, 3] = np.reshape(im_vect, im_shape)
+    return im_arr
+
+def b64encode(im_arr):
+    import six
     import base64
     import matplotlib.pyplot as plt
-    import numpy as np
-    import six
     in_memory_path = six.BytesIO()
-    plt.imsave(in_memory_path, np.reshape(im_vect, im_shape), cmap=plt.get_cmap(colormap_name))
+    plt.imsave(in_memory_path, im_arr)
     encoded = base64.b64encode(in_memory_path.getvalue())
     return encoded.decode('ascii')
 
@@ -164,7 +184,6 @@ def _getspectrum(imzml_idx, m, index):
     return mz_array, intensity_array
 
 def prettify_spectrum(mzs, ints, peak_type='centroids'):
-    import numpy as np
     if peak_type=='centroids':
         mzs = np.concatenate([mzs, mzs-0.00001, mzs+0.00001])
         ints = np.concatenate([ints, np.zeros(2*len(ints))])
@@ -176,16 +195,13 @@ def prettify_spectrum(mzs, ints, peak_type='centroids'):
     return mzs, ints
 
 def peak_type(ds_id):
-    import json
     ds_info = json.load(open(DS_INFO_FILENAME))
     return ds_info[ds_id]['peak_type']
 
 
 def get_isotope_pattern(sf, resolving_power=100000, instrument_type='tof', at_mz=None, cutoff_perc=0.1, charge=None, pts_per_mz=10000, **kwargs):
-    from cpyMSpec import isotopePattern, InstrumentModel, ProfileSpectrum
     # layer of compatibility with the original pyMSpec.pyisocalc module
-    from pyMSpec.mass_spectrum import MassSpectrum
-    import numpy as np
+
     if charge is None:
         charge = 1
     cutoff = cutoff_perc / 100.0
@@ -208,7 +224,6 @@ def get_isotope_pattern(sf, resolving_power=100000, instrument_type='tof', at_mz
     return ms
 
 def scan_folder_for_imzml(folder):
-    import os
     for root, dirs, files in  os.walk(folder):
         if 'CVS' in files:
             print(files)
@@ -224,3 +239,84 @@ def get_imzml_header(ds_id):
                 break
             header = header + line
     return header
+
+
+def get_mean_spectrum(ds_id):
+    imzml_fname = get_ds_info(ds_id)['imzml']
+    meanspec_fname = imzml_fname + '.meanspec'
+    if not os.path.exists(meanspec_fname):
+        print('generating mean spectrum')
+        meanspec = generate_mean_spectrum(ds_id)
+        pickle.dump(meanspec, open(meanspec_fname, 'wb'))
+    meanspec = pickle.load(open(meanspec_fname, 'rb'))
+    return meanspec
+
+def generate_mean_spectrum(ds_id, minmz=100, maxmz=1000):
+    info = get_ds_info(ds_id)
+    inst = getattr(instrument, info['instrument'])(resolving_power=info['resolving_power'], at_mz=info['at_mz'])
+    hist_axis = inst.generate_mz_axis(minmz, maxmz)
+    mz_axis = (hist_axis[0:-1] + hist_axis[1:])/2.
+    # calculate mean along some m/z axis
+    imzml = ImzMLParser.ImzMLParser(info['imzml'])
+    mean_spec = np.zeros(np.shape(mz_axis))
+    for ix, c in enumerate(imzml.coordinates):
+        mzs, ints = map(np.asarray, imzml.getspectrum(ix))
+        if any([minmz, maxmz]):
+            ix_l = np.searchsorted(mzs,minmz)
+            ix_u = np.searchsorted(mzs, maxmz)
+            mzs = mzs[ix_l:ix_u]
+            ints = mzs[ix_l:ix_u]
+        mean_spec += np.bincount(np.digitize(mzs, hist_axis)-1, weights=ints, minlength=len(mz_axis))
+    mean_spec = mean_spec / (ix+1.)
+    return mz_axis, mean_spec
+
+def correlation(ds_id, basemz, mz_list=None):
+    if not mz_list:
+        print('Get Mean Spectrum')
+        mean_spec = get_mean_spectrum(ds_id)
+        mz_list = gradient(mean_spec[0], mean_spec[1], min_intensity=10*mean_spec[1][mean_spec[1]>0].min())[0]
+        print(len(mz_list))
+    ds_info = get_ds_info(ds_id)
+    imzb = ImzbReader(ds_info['imzb'])
+    baseim = imzb.get_mz_image(basemz, ds_info['ppm']).flatten()
+    corr = np.zeros(len(mz_list))
+    for ii, mz in enumerate(mz_list):
+        ionim = imzb.get_mz_image(mz, ds_info['ppm'])
+        corrcoeff = np.corrcoef(baseim, ionim.flatten())
+        corr[ii] = corrcoeff[0][1]
+    return mz_list, corr
+
+def get_tic_image(ds_id):
+    imzb_fname = get_ds_info(ds_id)['imzb']
+    print(imzb_fname)
+    imzb = ImzbReader(imzb_fname)
+    print(imzb.width, imzb.height)
+    diff = np.diff(np.linspace(imzb.min_mz, imzb.max_mz, 1000))
+    ion_image = imzb.get_mz_image(mz, ppm)
+    return ion_image.T
+
+def get_peak_list(ds_id):
+    print('Get Mean Spectrum')
+    mean_spec = get_mean_spectrum(ds_id)
+    mz_list = gradient(mean_spec[0], mean_spec[1], min_intensity=10 * mean_spec[1][mean_spec[1] > 0].min())[0]
+    print(len(mz_list))
+    return mz_list
+
+def correlation_optical(ds_id, opticalim_id, mz_list=None):
+    from skimage import transform as tf
+    ds_info = get_ds_info(ds_id)
+    imzb = ImzbReader(ds_info['imzb'])
+    if not mz_list:
+        mz_list = get_peak_list(ds_id)
+    im, tmatrix = get_optical_image(ds_id, opticalim_id)
+    if len(im.shape) > 2:
+        im = im.mean(axis=2)
+    tform = tf.AffineTransform(matrix=np.asarray(tmatrix))
+    t_im = tf.warp(im, tform)[0:imzb.width, 0:imzb.height]
+    baseim = t_im.flatten()
+    corr = np.zeros(len(mz_list))
+    for ii, mz in enumerate(mz_list):
+        ionim = imzb.get_mz_image(mz, ds_info['ppm'])
+        corrcoeff = np.corrcoef(baseim, ionim.flatten())
+        corr[ii] = corrcoeff[0][1]
+    return mz_list, corr
