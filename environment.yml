@@ -1,6 +1,7 @@
 name: data-serve
 
 dependencies:
+  - python=2.7
   - numpy
   - cffi
   - six

@@ -51,11 +51,11 @@ def convert_dataset(imzml, imzb, ds_id, ds_meta, ims_path):
 
 
 if __name__ == '__main__':
-    # scrape_metaspace ["dsid1", "dsid2] "parent/folder/" --ims_path "/path/to/ims"
+    # scripts/scrape_metaspace.py --ds-ids 2017-08-22_23h34m34s --destination /tmp
     parser = argparse.ArgumentParser(description='Scrape data from metaspace')
-    parser.add_argument('ds_ids')
-    parser.add_argument('destination')
-    parser.add_argument("--ims_path", default="ims")
+    parser.add_argument('--ds-ids', nargs='+', required=True)
+    parser.add_argument('--destination', required=True)
+    parser.add_argument("--ims-path", default="ims")
     args = parser.parse_args()
     jsons = {}
     for ds_id in args.ds_ids:
@@ -63,7 +63,8 @@ if __name__ == '__main__':
             md = sm_annotation_utils.SMInstance().dataset(id = ds_id)
             imzml_fn, imzb_fn = get_dataset(md.s3dir[6:], args.destination)
             #print imzml_fn, imzb_fn
-            jsons.update(convert_dataset(imzml_fn, imzb_fn, ds_id, json.loads(md.metadata.json)))
+            jsons.update(convert_dataset(imzml=imzml_fn, imzb=imzb_fn, ds_id=ds_id,
+                                         ds_meta=json.loads(md.metadata.json), ims_path=args.ims_path))
         except Exception as e:
             print e
             print ds_id
